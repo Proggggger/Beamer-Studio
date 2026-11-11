@@ -39,6 +39,10 @@ npm run preview # serve the production bundle
   the palette (structure color, title bars, background, foreground, alert),
   switch 16:9 / 4:3, change fonts and font scale, and choose bullet/block shapes
   and navigation symbols.
+- **Fonts and languages** — pick a font family from the Layout panel (Latin
+  Modern, TeX Gyre, Libertinus, Fira, Source Sans, DejaVu, Noto), set the beamer
+  base size and choose a main language plus any additional polyglossia
+  languages.
 - **Undo / redo** — `Ctrl+Z` / `Ctrl+Shift+Z`.
 - **Save / Open** — Save downloads a `.beamer.json` project (including embedded
   images); Open restores one. `Ctrl+S` saves, `Ctrl+E` opens the export viewer.
@@ -47,7 +51,9 @@ npm run preview # serve the production bundle
 
 The **Export LaTeX** button opens a syntax-highlighted viewer with copy and
 download actions. The generated source is a complete Beamer document using the
-selected theme, colortheme, aspect ratio and custom color definitions.
+selected theme, colortheme, aspect ratio, font (via fontspec), languages (via
+polyglossia) and custom color definitions. It starts with
+`% !TeX program = xelatex` and must be compiled with XeLaTeX.
 
 Images are embedded in the project file but cannot be embedded in LaTeX source.
 Exported decks reference them by filename, for example:
@@ -56,10 +62,12 @@ Exported decks reference them by filename, for example:
 \includegraphics[width=0.70\textwidth]{chart.png}
 ```
 
-Place the original image files next to the `.tex` file before compiling:
+Place the original image files next to the `.tex` file before compiling. The
+chosen font must be installed; otherwise the export falls back to Latin Modern
+and prints a package warning:
 
 ```bash
-pdflatex presentation.tex
+xelatex presentation.tex
 ```
 
 The preview is an approximation of Beamer's layout, not a pixel-exact copy.
