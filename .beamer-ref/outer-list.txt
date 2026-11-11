@@ -1,0 +1,9 @@
+beamerouterthemedefault.sty
+beamerouterthemeinfolines.sty
+beamerouterthememiniframes.sty
+beamerouterthemeshadow.sty
+beamerouterthemesidebar.sty
+beamerouterthemesmoothbars.sty
+beamerouterthemesmoothtree.sty
+beamerouterthemesplit.sty
+beamerouterthemetree.sty

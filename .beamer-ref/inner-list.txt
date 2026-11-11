@@ -1,0 +1,5 @@
+beamerinnerthemecircles.sty
+beamerinnerthemedefault.sty
+beamerinnerthemeinmargin.sty
+beamerinnerthemerectangles.sty
+beamerinnerthemerounded.sty
