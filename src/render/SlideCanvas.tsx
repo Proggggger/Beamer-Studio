@@ -3,7 +3,7 @@ import { useDeckStore } from '../model/store';
 import type { Deck, Slide } from '../model/types';
 import type { ResolvedTheme } from '../themes/resolve';
 import {
-  backgroundPositionCss,
+  backgroundPlacementCss,
   backgroundSizeCss,
   resolveSlideBackground,
 } from '../themes/backgrounds';
@@ -225,17 +225,20 @@ export function SlideCanvas({
       data-template={theme.spec.name}
     >
       {background ? (
-        <div
-          className="bx-slide-bg"
-          aria-hidden
-          style={{
-            backgroundImage: `url("${background.image.src}")`,
-            backgroundSize: backgroundSizeCss(background.image),
-            backgroundPosition: backgroundPositionCss(background.image.position),
-            backgroundRepeat: 'no-repeat',
-            opacity: background.image.opacity / 100,
-          }}
-        />
+        <div className="bx-slide-bg" aria-hidden>
+          {background.layers.map((layer) => (
+            <div
+              key={layer.id}
+              className="bx-slide-bg-layer"
+              style={{
+                backgroundImage: `url("${layer.src}")`,
+                backgroundSize: backgroundSizeCss(layer),
+                backgroundPosition: backgroundPlacementCss(layer, theme.page.w, theme.page.h),
+                opacity: layer.opacity / 100,
+              }}
+            />
+          ))}
+        </div>
       ) : null}
       {slide.kind === 'title' ? (
         <TitlePage deck={deck} theme={theme} editable={editable} />

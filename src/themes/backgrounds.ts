@@ -1,3 +1,4 @@
+import { uid } from '../model/ids';
 import type {
   BackgroundImageSettings,
   BackgroundPosition,
@@ -6,7 +7,7 @@ import type {
   SlideKind,
 } from '../model/types';
 
-export const EMPTY_BACKGROUNDS: SlideBackgrounds = { all: null, title: null, section: null };
+export const EMPTY_BACKGROUNDS: SlideBackgrounds = { all: [], title: [], section: [] };
 
 export const BACKGROUND_POSITIONS: Array<{ id: BackgroundPosition; label: string }> = [
   { id: 'top-left', label: 'Top left' },
@@ -26,14 +27,40 @@ export const BACKGROUND_MODES: Array<{ id: BackgroundSizeMode; label: string }> 
   { id: 'stretch', label: 'Stretch to page' },
 ];
 
+/** Anchor fractions in screen coordinates: x from the left, y from the top. */
+export const BACKGROUND_ANCHOR_FRACTIONS: Record<
+  BackgroundPosition,
+  { x: number; y: number }
+> = {
+  center: { x: 0.5, y: 0.5 },
+  top: { x: 0.5, y: 0 },
+  bottom: { x: 0.5, y: 1 },
+  left: { x: 0, y: 0.5 },
+  right: { x: 1, y: 0.5 },
+  'top-left': { x: 0, y: 0 },
+  'top-right': { x: 1, y: 0 },
+  'bottom-left': { x: 0, y: 1 },
+  'bottom-right': { x: 1, y: 1 },
+};
+
 export function newBackground(src: string, name: string): BackgroundImageSettings {
-  return { src, name, opacity: 100, mode: 'scale', scale: 100, position: 'center' };
+  return {
+    id: uid('bg'),
+    src,
+    name,
+    opacity: 100,
+    mode: 'scale',
+    scale: 100,
+    position: 'center',
+    offsetX: 0,
+    offsetY: 0,
+  };
 }
 
 export interface SlideBackground {
-  /** Which slot supplied the image; title/section fall back to 'all'. */
+  /** Which slot supplied the stack; title/section fall back to 'all'. */
   slot: keyof SlideBackgrounds;
-  image: BackgroundImageSettings;
+  layers: BackgroundImageSettings[];
 }
 
 export function backgroundSlotFor(kind: SlideKind): keyof SlideBackgrounds {
@@ -47,30 +74,34 @@ export function resolveSlideBackground(
   kind: SlideKind,
 ): SlideBackground | null {
   const slot = backgroundSlotFor(kind);
-  const own = backgrounds[slot];
-  if (own) return { slot, image: own };
-  if (slot !== 'all' && backgrounds.all) return { slot: 'all', image: backgrounds.all };
+  if (backgrounds[slot].length > 0) return { slot, layers: backgrounds[slot] };
+  if (slot !== 'all' && backgrounds.all.length > 0) {
+    return { slot: 'all', layers: backgrounds.all };
+  }
   return null;
-}
-
-const CSS_POSITIONS: Record<BackgroundPosition, string> = {
-  center: 'center center',
-  top: 'center top',
-  bottom: 'center bottom',
-  left: 'left center',
-  right: 'right center',
-  'top-left': 'left top',
-  'top-right': 'right top',
-  'bottom-left': 'left bottom',
-  'bottom-right': 'right bottom',
-};
-
-export function backgroundPositionCss(position: BackgroundPosition): string {
-  return CSS_POSITIONS[position];
 }
 
 export function backgroundSizeCss(image: BackgroundImageSettings): string {
   if (image.mode === 'stretch') return '100% 100%';
   if (image.mode === 'fit') return 'contain';
   return `${image.scale}% auto`;
+}
+
+/**
+ * CSS background-position that mirrors the export anchors: the percentage
+ * aligns the image to the page anchor, the pixel part is the manual offset.
+ */
+export function backgroundPlacementCss(
+  image: BackgroundImageSettings,
+  pageWidth: number,
+  pageHeight: number,
+): string {
+  const anchor = BACKGROUND_ANCHOR_FRACTIONS[image.position];
+  const shiftX = (image.offsetX / 100) * pageWidth;
+  const shiftY = (image.offsetY / 100) * pageHeight;
+  const axis = (percent: number, shift: number) =>
+    shift === 0
+      ? `${percent}%`
+      : `calc(${percent}% ${shift > 0 ? '+' : '-'} ${Math.abs(shift).toFixed(1)}px)`;
+  return `${axis(anchor.x * 100, shiftX)} ${axis(anchor.y * 100, shiftY)}`;
 }

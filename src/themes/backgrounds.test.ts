@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BackgroundImageSettings } from '../model/types';
 import {
-  backgroundPositionCss,
+  backgroundPlacementCss,
   backgroundSizeCss,
   backgroundSlotFor,
   EMPTY_BACKGROUNDS,
@@ -10,12 +10,15 @@ import {
 } from './backgrounds';
 
 const image: BackgroundImageSettings = {
+  id: 'bg-1',
   src: 'data:image/png;base64,AAAA',
   name: 'background.png',
   opacity: 100,
   mode: 'scale',
   scale: 100,
   position: 'center',
+  offsetX: 0,
+  offsetY: 0,
 };
 
 describe('resolveSlideBackground', () => {
@@ -24,37 +27,64 @@ describe('resolveSlideBackground', () => {
     expect(resolveSlideBackground(EMPTY_BACKGROUNDS, 'title')).toBeNull();
   });
 
-  it('applies the shared image to every slide kind', () => {
-    const backgrounds = { ...EMPTY_BACKGROUNDS, all: image };
+  it('applies the shared stack to every slide kind', () => {
+    const backgrounds = { ...EMPTY_BACKGROUNDS, all: [image] };
     expect(resolveSlideBackground(backgrounds, 'frame')?.slot).toBe('all');
     expect(resolveSlideBackground(backgrounds, 'title')?.slot).toBe('all');
     expect(resolveSlideBackground(backgrounds, 'section')?.slot).toBe('all');
+    expect(resolveSlideBackground(backgrounds, 'frame')?.layers).toEqual([image]);
   });
 
-  it('prefers dedicated title and section images', () => {
-    const title = { ...image, name: 'title.png' };
-    const section = { ...image, name: 'section.png' };
-    const backgrounds = { ...EMPTY_BACKGROUNDS, all: image, title, section };
-    expect(resolveSlideBackground(backgrounds, 'title')).toEqual({ slot: 'title', image: title });
+  it('prefers dedicated title and section stacks', () => {
+    const title = { ...image, id: 't1', name: 'title.png' };
+    const section = { ...image, id: 's1', name: 'section.png' };
+    const backgrounds = { ...EMPTY_BACKGROUNDS, all: [image], title: [title], section: [section] };
+    expect(resolveSlideBackground(backgrounds, 'title')).toEqual({
+      slot: 'title',
+      layers: [title],
+    });
     expect(resolveSlideBackground(backgrounds, 'section')).toEqual({
       slot: 'section',
-      image: section,
+      layers: [section],
     });
     expect(resolveSlideBackground(backgrounds, 'frame')?.slot).toBe('all');
   });
 
-  it('keeps a dedicated image when no shared one exists', () => {
-    const backgrounds = { ...EMPTY_BACKGROUNDS, title: image };
+  it('keeps dedicated stacks when no shared one exists', () => {
+    const backgrounds = { ...EMPTY_BACKGROUNDS, title: [image] };
     expect(resolveSlideBackground(backgrounds, 'title')?.slot).toBe('title');
     expect(resolveSlideBackground(backgrounds, 'frame')).toBeNull();
+  });
+
+  it('keeps the whole stack in order', () => {
+    const logo = { ...image, id: 'bg-2', name: 'logo.png', scale: 20 };
+    const backgrounds = { ...EMPTY_BACKGROUNDS, all: [image, logo] };
+    expect(resolveSlideBackground(backgrounds, 'frame')?.layers.map((layer) => layer.id)).toEqual([
+      'bg-1',
+      'bg-2',
+    ]);
   });
 });
 
 describe('background CSS mapping', () => {
-  it('maps anchors to CSS positions', () => {
-    expect(backgroundPositionCss('center')).toBe('center center');
-    expect(backgroundPositionCss('top-left')).toBe('left top');
-    expect(backgroundPositionCss('bottom-right')).toBe('right bottom');
+  it('maps anchors to CSS positions without offsets', () => {
+    expect(backgroundPlacementCss(image, 960, 540)).toBe('50% 50%');
+    expect(backgroundPlacementCss({ ...image, position: 'top-left' }, 960, 540)).toBe('0% 0%');
+    expect(backgroundPlacementCss({ ...image, position: 'bottom-right' }, 960, 540)).toBe(
+      '100% 100%',
+    );
+  });
+
+  it('converts page-percent offsets to pixels from the anchor', () => {
+    const placed: BackgroundImageSettings = {
+      ...image,
+      position: 'top-right',
+      offsetX: 10,
+      offsetY: -5,
+    };
+    expect(backgroundPlacementCss(placed, 960, 540)).toBe(
+      'calc(100% + 96.0px) calc(0% - 27.0px)',
+    );
   });
 
   it('maps size modes', () => {
@@ -66,14 +96,17 @@ describe('background CSS mapping', () => {
 
 describe('background helpers', () => {
   it('builds a default settings object', () => {
-    expect(newBackground('data:image/png;base64,AAAA', 'photo.png')).toEqual({
+    expect(newBackground('data:image/png;base64,AAAA', 'photo.png')).toMatchObject({
       src: 'data:image/png;base64,AAAA',
       name: 'photo.png',
       opacity: 100,
       mode: 'scale',
       scale: 100,
       position: 'center',
+      offsetX: 0,
+      offsetY: 0,
     });
+    expect(newBackground('data:image/png;base64,AAAA', 'photo.png').id).toMatch(/^bg_/);
   });
 
   it('routes slide kinds to slots', () => {

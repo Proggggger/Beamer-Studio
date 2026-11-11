@@ -148,6 +148,7 @@ export type BackgroundPosition =
 export type BackgroundSizeMode = 'scale' | 'fit' | 'stretch';
 
 export interface BackgroundImageSettings {
+  id: string;
   /** Data URL of the uploaded image. */
   src: string;
   name: string;
@@ -157,13 +158,19 @@ export interface BackgroundImageSettings {
   /** Width as a percentage of the page when mode is 'scale'. */
   scale: number;
   position: BackgroundPosition;
+  /** Fine placement offset from the anchor, in percent of the page. */
+  offsetX: number;
+  offsetY: number;
 }
 
-/** null inherits the shared image on title/section pages; on 'all' it means no image. */
+/**
+ * Ordered image stacks drawn back to front. Empty title/section lists inherit
+ * the shared stack; on 'all' an empty list means no background.
+ */
 export interface SlideBackgrounds {
-  all: BackgroundImageSettings | null;
-  title: BackgroundImageSettings | null;
-  section: BackgroundImageSettings | null;
+  all: BackgroundImageSettings[];
+  title: BackgroundImageSettings[];
+  section: BackgroundImageSettings[];
 }
 
 export interface CustomColors {

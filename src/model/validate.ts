@@ -175,11 +175,12 @@ function validCustom(value: unknown): CustomColors {
   return custom;
 }
 
-function validBackground(value: unknown): BackgroundImageSettings | null {
+function validBackground(value: unknown, fallbackId: string): BackgroundImageSettings | null {
   if (!isObject(value)) return null;
   const src = str(value.src);
   if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(src)) return null;
   const name = str(value.name, 'background').replace(/[\u0000-\u001f\\{}]/g, '').trim().slice(0, 120);
+  const id = str(value.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || fallbackId;
   const opacity =
     typeof value.opacity === 'number' && Number.isFinite(value.opacity)
       ? Math.round(Math.max(0, Math.min(100, value.opacity)))
@@ -188,6 +189,14 @@ function validBackground(value: unknown): BackgroundImageSettings | null {
     typeof value.scale === 'number' && Number.isFinite(value.scale)
       ? Math.round(Math.max(5, Math.min(200, value.scale)))
       : 100;
+  const offset =
+    typeof value.offsetX === 'number' && Number.isFinite(value.offsetX)
+      ? Math.round(Math.max(-50, Math.min(50, value.offsetX)))
+      : 0;
+  const vertical =
+    typeof value.offsetY === 'number' && Number.isFinite(value.offsetY)
+      ? Math.round(Math.max(-50, Math.min(50, value.offsetY)))
+      : 0;
   const mode =
     value.mode === 'fit' || value.mode === 'stretch' || value.mode === 'scale'
       ? value.mode
@@ -195,15 +204,42 @@ function validBackground(value: unknown): BackgroundImageSettings | null {
   const position = BACKGROUND_POSITIONS.some((entry) => entry.id === value.position)
     ? (value.position as BackgroundImageSettings['position'])
     : 'center';
-  return { src, name: name || 'background', opacity, mode, scale, position };
+  return {
+    id,
+    src,
+    name: name || 'background',
+    opacity,
+    mode,
+    scale,
+    position,
+    offsetX: offset,
+    offsetY: vertical,
+  };
+}
+
+/** Accepts the legacy single-image slot as well as the current layer list. */
+function validBackgroundList(value: unknown, slot: string): BackgroundImageSettings[] {
+  const entries = Array.isArray(value) ? value : isObject(value) ? [value] : [];
+  const layers: BackgroundImageSettings[] = [];
+  const used = new Set<string>();
+  entries.forEach((entry, index) => {
+    const layer = validBackground(entry, `bg-${slot}-${index}`);
+    if (!layer) return;
+    let id = layer.id;
+    let suffix = 2;
+    while (used.has(id)) id = `${layer.id}-${suffix++}`;
+    used.add(id);
+    layers.push({ ...layer, id });
+  });
+  return layers;
 }
 
 function validBackgrounds(value: unknown): SlideBackgrounds {
   const raw = isObject(value) ? value : {};
   return {
-    all: validBackground(raw.all),
-    title: validBackground(raw.title),
-    section: validBackground(raw.section),
+    all: validBackgroundList(raw.all, 'all'),
+    title: validBackgroundList(raw.title, 'title'),
+    section: validBackgroundList(raw.section, 'section'),
   };
 }
 

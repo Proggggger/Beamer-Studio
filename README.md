@@ -49,11 +49,12 @@ npm run preview # serve the production bundle
   when it carries the glyphs, otherwise it falls back to a same-style face).
   The export wraps those runs in `\textgreek{...}` / `\textrussian{...}` so
   XeLaTeX switches fonts instead of dropping the glyphs.
-- **Slide backgrounds** — the Background tab attaches an image behind every
-  slide, with optional dedicated images for title and section pages. Each slot
-  has opacity, size mode (scale to width, fit, stretch), width while scaling and
-  one of nine anchor positions. Backgrounds sit behind content on the canvas
-  and thumbnails.
+- **Slide backgrounds** — the Background tab attaches layers behind every
+  slide, with optional dedicated stacks for title and section pages. Each slot
+  holds any number of images drawn back to front (a backdrop then a logo);
+  reorder or remove layers, and give each its own opacity, size mode (scale to
+  width, fit, stretch), width, one of nine anchors, and horizontal/vertical
+  offset. Backgrounds sit behind content on the canvas and thumbnails.
 - **Undo / redo** — `Ctrl+Z` / `Ctrl+Shift+Z`.
 - **Save / Open** — Save downloads a `.beamer.json` project (including embedded
   images); Open restores one. `Ctrl+S` saves, `Ctrl+E` opens the export viewer.
@@ -74,8 +75,9 @@ Exported decks reference them by filename, for example:
 ```
 
 Place the original image files next to the `.tex` file before compiling.
-Background images are referenced the same way inside a page-sized
-`\usebackgroundtemplate` that switches when the active background changes.
+Background layers are referenced the same way, each as a positioned TikZ node
+in one page-sized `\usebackgroundtemplate` that switches when the active stack
+changes.
 The chosen font must be installed; otherwise the export falls back to Latin Modern
 and prints a package warning:
 

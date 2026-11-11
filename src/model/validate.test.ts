@@ -121,13 +121,13 @@ describe('parseDeck backgrounds', () => {
 
   it('fills empty slots for decks saved before backgrounds existed', () => {
     expect(parseDeck(createEmptyDeck())?.theme.backgrounds).toEqual({
-      all: null,
-      title: null,
-      section: null,
+      all: [],
+      title: [],
+      section: [],
     });
   });
 
-  it('normalizes opacity, scale, mode and position', () => {
+  it('migrates a legacy single image into a one-layer stack', () => {
     const parsed = parseDeck(
       withBackgrounds({
         all: {
@@ -140,15 +140,35 @@ describe('parseDeck backgrounds', () => {
         },
       }),
     );
-    expect(parsed?.theme.backgrounds.all).toEqual({
-      src,
-      name: 'hero.png',
-      opacity: 100,
-      scale: 5,
-      mode: 'stretch',
-      position: 'bottom-right',
-    });
-    expect(parsed?.theme.backgrounds.title).toBeNull();
+    expect(parsed?.theme.backgrounds.all).toEqual([
+      {
+        id: 'bg-all-0',
+        src,
+        name: 'hero.png',
+        opacity: 100,
+        scale: 5,
+        mode: 'stretch',
+        position: 'bottom-right',
+        offsetX: 0,
+        offsetY: 0,
+      },
+    ]);
+    expect(parsed?.theme.backgrounds.title).toEqual([]);
+  });
+
+  it('keeps layer order and clamps offsets', () => {
+    const parsed = parseDeck(
+      withBackgrounds({
+        all: [
+          { id: 'back', src, name: 'backdrop.png', offsetX: 80, offsetY: -80 },
+          { src, name: 'logo.png', offsetX: 12.6, offsetY: -4.4 },
+        ],
+      }),
+    );
+    const layers = parsed?.theme.backgrounds.all ?? [];
+    expect(layers.map((layer) => layer.name)).toEqual(['backdrop.png', 'logo.png']);
+    expect(layers[0]).toMatchObject({ id: 'back', offsetX: 50, offsetY: -50 });
+    expect(layers[1]).toMatchObject({ id: 'bg-all-1', offsetX: 13, offsetY: -4 });
   });
 
   it('falls back to defaults for unknown enums and scrubs the name', () => {
@@ -157,14 +177,19 @@ describe('parseDeck backgrounds', () => {
         section: { src, name: 'bad\\name{}', opacity: -4, mode: 'zoom', position: 'middle' },
       }),
     );
-    expect(parsed?.theme.backgrounds.section).toEqual({
-      src,
-      name: 'badname',
-      opacity: 0,
-      scale: 100,
-      mode: 'scale',
-      position: 'center',
-    });
+    expect(parsed?.theme.backgrounds.section).toEqual([
+      {
+        id: 'bg-section-0',
+        src,
+        name: 'badname',
+        opacity: 0,
+        scale: 100,
+        mode: 'scale',
+        position: 'center',
+        offsetX: 0,
+        offsetY: 0,
+      },
+    ]);
   });
 
   it('drops slots without an embedded image', () => {
@@ -174,8 +199,8 @@ describe('parseDeck backgrounds', () => {
         title: { src: '', name: 'empty' },
       }),
     );
-    expect(parsed?.theme.backgrounds.all).toBeNull();
-    expect(parsed?.theme.backgrounds.title).toBeNull();
+    expect(parsed?.theme.backgrounds.all).toEqual([]);
+    expect(parsed?.theme.backgrounds.title).toEqual([]);
   });
 });
 

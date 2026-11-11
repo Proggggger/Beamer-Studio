@@ -573,14 +573,18 @@ describe('images in export', () => {
 
 describe('slide backgrounds', () => {
   const src = 'data:image/png;base64,AAAA';
-  const image = {
+  const layer = {
+    id: 'bg-1',
     src,
     name: 'backdrop.png',
     opacity: 40,
     mode: 'scale' as const,
     scale: 50,
     position: 'top-right' as const,
+    offsetX: 0,
+    offsetY: 0,
   };
+  const empty = { all: [], title: [], section: [] };
   const title: Slide = { id: 't', kind: 'title', title: '', layout: 'normal', body: [] };
 
   function backgroundsDeck(backgrounds: Deck['theme']['backgrounds'], slides: Slide[] = [title, frame([], { title: 'Body' })]) {
@@ -588,7 +592,7 @@ describe('slide backgrounds', () => {
   }
 
   it('emits a reusable canvas template with fill, anchor, opacity and size', () => {
-    const tex = toLatex(backgroundsDeck({ all: image, title: null, section: null }));
+    const tex = toLatex(backgroundsDeck({ ...empty, all: [layer] }));
     expect(tex).toMatch(/\\definecolor\{bxBackgroundFill\}\{HTML\}\{[0-9A-F]{6}\}/);
     expect(tex).toContain('\\usepackage{tikz}');
     expect(tex).toContain('\\usebackgroundtemplate{%');
@@ -599,23 +603,41 @@ describe('slide backgrounds', () => {
     expect(tex.match(/\\usebackgroundtemplate/g)).toHaveLength(1);
   });
 
+  it('stacks layers in order and applies the manual offsets', () => {
+    const logo = {
+      ...layer,
+      id: 'bg-2',
+      name: 'logo.png',
+      opacity: 100,
+      scale: 20,
+      position: 'bottom-right' as const,
+      offsetX: -5,
+      offsetY: 5,
+    };
+    const tex = toLatex(backgroundsDeck({ ...empty, all: [layer, logo] }));
+    expect(tex).toContain(
+      '\\node[anchor=north east,inner sep=0pt,opacity=0.40] at (160.00mm,90.00mm) {\\includegraphics[width=80.00mm]{backdrop.png}};',
+    );
+    expect(tex).toContain(
+      '\\node[anchor=south east,inner sep=0pt,opacity=1.00] at (152.00mm,-4.50mm) {\\includegraphics[width=32.00mm]{logo.png}};',
+    );
+    expect(tex.indexOf('backdrop.png')).toBeLessThan(tex.indexOf('logo.png'));
+    expect(tex.match(/\\usebackgroundtemplate/g)).toHaveLength(1);
+  });
+
   it('supports fit and stretch sizing', () => {
-    const fit = toLatex(
-      backgroundsDeck({ all: { ...image, mode: 'fit' }, title: null, section: null }),
-    );
+    const fit = toLatex(backgroundsDeck({ ...empty, all: [{ ...layer, mode: 'fit' }] }));
     expect(fit).toContain('\\includegraphics[width=\\paperwidth,height=\\paperheight,keepaspectratio]{backdrop.png}');
-    const stretch = toLatex(
-      backgroundsDeck({ all: { ...image, mode: 'stretch' }, title: null, section: null }),
-    );
+    const stretch = toLatex(backgroundsDeck({ ...empty, all: [{ ...layer, mode: 'stretch' }] }));
     expect(stretch).toContain('\\includegraphics[width=\\paperwidth,height=\\paperheight]{backdrop.png}');
   });
 
-  it('uses the title override and restores the shared image', () => {
+  it('uses the title override and restores the shared stack', () => {
     const tex = toLatex(
       backgroundsDeck({
-        all: image,
-        title: { ...image, name: 'title-bg.png' },
-        section: null,
+        ...empty,
+        all: [layer],
+        title: [{ ...layer, id: 'bg-t', name: 'title-bg.png' }],
       }),
     );
     expect(tex).toContain('{title-bg.png}');
@@ -624,7 +646,7 @@ describe('slide backgrounds', () => {
   });
 
   it('fills the canvas when only title pages have an image', () => {
-    const tex = toLatex(backgroundsDeck({ all: null, title: image, section: null }));
+    const tex = toLatex(backgroundsDeck({ ...empty, title: [layer] }));
     expect(tex).toContain('{backdrop.png}');
     expect(tex).toContain('\\fill[bxBackgroundFill]');
   });
@@ -635,17 +657,18 @@ describe('slide backgrounds', () => {
     expect(tex).not.toContain('bxBackgroundFill');
   });
 
-  it('collects background images with stable keys', () => {
+  it('collects background layers with stable keys', () => {
     const images = collectImages(
       backgroundsDeck({
-        all: image,
-        title: { ...image, name: 'title-bg.png' },
-        section: null,
+        ...empty,
+        all: [layer, { ...layer, id: 'bg-2', name: 'logo.png' }],
+        title: [{ ...layer, id: 'bg-t', name: 'title-bg.png' }],
       }),
     );
     expect(images.map((entry) => [entry.key, entry.name])).toEqual([
-      ['bg:all', 'backdrop.png'],
-      ['bg:title', 'title-bg.png'],
+      ['bg:all:0', 'backdrop.png'],
+      ['bg:all:1', 'logo.png'],
+      ['bg:title:0', 'title-bg.png'],
     ]);
   });
 });

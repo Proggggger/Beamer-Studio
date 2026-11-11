@@ -476,30 +476,30 @@ function BackgroundCard({
   slot,
   title,
   hint,
-  value,
+  layers,
   inherited,
   onChange,
 }: {
   slot: keyof SlideBackgrounds;
   title: string;
   hint: string;
-  value: BackgroundImageSettings | null;
+  layers: BackgroundImageSettings[];
   inherited: boolean;
-  onChange: (value: BackgroundImageSettings | null) => void;
+  onChange: (layers: BackgroundImageSettings[]) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = layers.find((layer) => layer.id === selectedId) ?? layers[0];
 
-  const pick = async (file: File | undefined) => {
+  const add = async (file: File | undefined) => {
     if (!file) return;
     setBusy(true);
     try {
       const result = await readImageFile(file);
-      onChange({
-        ...(value ?? newBackground(result.src, result.name)),
-        src: result.src,
-        name: result.name,
-      });
+      const layer = newBackground(result.src, result.name);
+      setSelectedId(layer.id);
+      onChange([...layers, layer]);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Could not read that image.');
     } finally {
@@ -508,84 +508,170 @@ function BackgroundCard({
   };
 
   const update = (patch: Partial<BackgroundImageSettings>) => {
-    if (value) onChange({ ...value, ...patch });
+    if (!selected) return;
+    onChange(layers.map((layer) => (layer.id === selected.id ? { ...layer, ...patch } : layer)));
   };
+
+  const remove = (id: string) => {
+    const next = layers.filter((layer) => layer.id !== id);
+    if (selectedId === id) setSelectedId(next[0]?.id ?? null);
+    onChange(next);
+  };
+
+  const move = (id: string, delta: number) => {
+    const from = layers.findIndex((layer) => layer.id === id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= layers.length) return;
+    const next = [...layers];
+    [next[from], next[to]] = [next[to], next[from]];
+    onChange(next);
+  };
+
+  const modeLabel = (id: BackgroundImageSettings['mode']) =>
+    BACKGROUND_MODES.find((entry) => entry.id === id)?.label ?? id;
+  const positionLabel = (id: BackgroundImageSettings['position']) =>
+    BACKGROUND_POSITIONS.find((entry) => entry.id === id)?.label ?? id;
 
   return (
     <section className="panel-section bg-card">
       <h3>{title}</h3>
       <p className="panel-hint">{hint}</p>
-      {value ? (
+      {layers.length > 0 ? (
         <>
-          <div className="bg-thumb">
-            <img src={value.src} alt={value.name} />
+          <div className="bg-layers">
+            {layers.map((layer, index) => (
+              <div
+                key={layer.id}
+                className={`bg-layer${selected?.id === layer.id ? ' is-selected' : ''}`}
+                onClick={() => setSelectedId(layer.id)}
+              >
+                <div className="bg-layer-thumb">
+                  <img src={layer.src} alt="" />
+                </div>
+                <div className="bg-layer-text">
+                  <span className="bg-name" title={layer.name}>
+                    {layer.name}
+                  </span>
+                  <span className="bg-layer-meta">
+                    {positionLabel(layer.position)} · {modeLabel(layer.mode)} · {layer.opacity}%
+                  </span>
+                </div>
+                <div className="bg-layer-actions" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    title="Move up"
+                    disabled={index === 0}
+                    onClick={() => move(layer.id, -1)}
+                  >
+                    &#9652;
+                  </button>
+                  <button
+                    type="button"
+                    title="Move down"
+                    disabled={index === layers.length - 1}
+                    onClick={() => move(layer.id, 1)}
+                  >
+                    &#9662;
+                  </button>
+                  <button type="button" title="Remove layer" onClick={() => remove(layer.id)}>
+                    &#10005;
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="bg-name" title={value.name}>
-            {value.name}
+          <p className="panel-hint bg-stack-hint">
+            Layers draw in order; the last image sits on top. Offsets are a percentage of the page.
           </p>
+          {selected ? (
+            <>
+              <Field label={`Opacity · ${selected.opacity}%`}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={selected.opacity}
+                  onChange={(event) => update({ opacity: Number(event.target.value) })}
+                />
+              </Field>
+              <Field label="Size">
+                <select
+                  value={selected.mode}
+                  onChange={(event) =>
+                    update({ mode: event.target.value as BackgroundImageSettings['mode'] })
+                  }
+                >
+                  {BACKGROUND_MODES.map((mode) => (
+                    <option key={mode.id} value={mode.id}>
+                      {mode.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {selected.mode === 'scale' ? (
+                <Field label={`Image width · ${selected.scale}%`}>
+                  <input
+                    type="range"
+                    min={10}
+                    max={200}
+                    step={5}
+                    value={selected.scale}
+                    onChange={(event) => update({ scale: Number(event.target.value) })}
+                  />
+                </Field>
+              ) : null}
+              <Field label="Anchor">
+                <select
+                  value={selected.position}
+                  onChange={(event) =>
+                    update({ position: event.target.value as BackgroundImageSettings['position'] })
+                  }
+                >
+                  {BACKGROUND_POSITIONS.map((position) => (
+                    <option key={position.id} value={position.id}>
+                      {position.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={`Horizontal offset · ${selected.offsetX}%`}>
+                <input
+                  type="range"
+                  min={-50}
+                  max={50}
+                  step={1}
+                  value={selected.offsetX}
+                  onChange={(event) => update({ offsetX: Number(event.target.value) })}
+                />
+              </Field>
+              <Field label={`Vertical offset · ${selected.offsetY}%`}>
+                <input
+                  type="range"
+                  min={-50}
+                  max={50}
+                  step={1}
+                  value={selected.offsetY}
+                  onChange={(event) => update({ offsetY: Number(event.target.value) })}
+                />
+              </Field>
+            </>
+          ) : null}
           <div className="bg-row">
             <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
-              {busy ? 'Reading…' : 'Replace image'}
+              {busy ? 'Reading…' : 'Add image'}
             </button>
-            <button type="button" className="btn btn-tiny" onClick={() => onChange(null)}>
-              {slot === 'all' ? 'Remove' : 'Use shared image'}
-            </button>
+            {slot !== 'all' ? (
+              <button type="button" className="btn btn-tiny" onClick={() => onChange([])}>
+                Use shared layers
+              </button>
+            ) : null}
           </div>
-          <Field label={`Opacity · ${value.opacity}%`}>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={value.opacity}
-              onChange={(event) => update({ opacity: Number(event.target.value) })}
-            />
-          </Field>
-          <Field label="Size">
-            <select
-              value={value.mode}
-              onChange={(event) =>
-                update({ mode: event.target.value as BackgroundImageSettings['mode'] })
-              }
-            >
-              {BACKGROUND_MODES.map((mode) => (
-                <option key={mode.id} value={mode.id}>
-                  {mode.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {value.mode === 'scale' ? (
-            <Field label={`Image width · ${value.scale}%`}>
-              <input
-                type="range"
-                min={10}
-                max={200}
-                step={5}
-                value={value.scale}
-                onChange={(event) => update({ scale: Number(event.target.value) })}
-              />
-            </Field>
-          ) : null}
-          <Field label="Position">
-            <select
-              value={value.position}
-              onChange={(event) =>
-                update({ position: event.target.value as BackgroundImageSettings['position'] })
-              }
-            >
-              {BACKGROUND_POSITIONS.map((position) => (
-                <option key={position.id} value={position.id}>
-                  {position.label}
-                </option>
-              ))}
-            </select>
-          </Field>
         </>
       ) : (
         <>
           <p className="panel-hint">
-            {inherited ? 'No override — using the shared background.' : 'No background image.'}
+            {inherited ? 'No override — using the shared background stack.' : 'No background image.'}
           </p>
           <div className="bg-row">
             <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
@@ -602,7 +688,7 @@ function BackgroundCard({
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
-          void pick(file);
+          void add(file);
         }}
       />
     </section>
@@ -617,8 +703,9 @@ function BackgroundsPanel() {
   return (
     <>
       <p className="panel-hint bg-intro">
-        Backgrounds sit behind the slide content in the preview and the XeLaTeX export. Title and
-        section pages can use their own image instead of the shared one.
+        Backgrounds sit behind the slide content in the preview and the XeLaTeX export. Each slot is
+        a stack: add several images (a backdrop and a logo, for example) and later layers draw on
+        top. Title and section pages can override the shared stack.
       </p>
       {BACKGROUND_SLOTS.map(({ slot, title, hint }) => (
         <BackgroundCard
@@ -626,11 +713,13 @@ function BackgroundsPanel() {
           slot={slot}
           title={title}
           hint={hint}
-          value={backgrounds[slot]}
-          inherited={slot !== 'all' && backgrounds[slot] === null && backgrounds.all !== null}
-          onChange={(value) =>
+          layers={backgrounds[slot]}
+          inherited={
+            slot !== 'all' && backgrounds[slot].length === 0 && backgrounds.all.length > 0
+          }
+          onChange={(layers) =>
             updateTheme(
-              { backgrounds: { ...backgrounds, [slot]: value } },
+              { backgrounds: { ...backgrounds, [slot]: layers } },
               `background:${slot}`,
             )
           }

@@ -10,7 +10,10 @@ import type {
   Slide,
 } from '../model/types';
 import { themeSpec } from '../themes/beamerThemes';
-import { resolveSlideBackground } from '../themes/backgrounds';
+import {
+  BACKGROUND_ANCHOR_FRACTIONS,
+  resolveSlideBackground,
+} from '../themes/backgrounds';
 import { readableOn, shade } from '../themes/colorMath';
 import { resolveFont, scriptFallbackChain } from '../themes/fonts';
 import { languageOption, languageScripts } from '../themes/languages';
@@ -153,16 +156,16 @@ function wrapScriptRuns(text: string, wrap: ScriptWrap, pdfSafe = false): string
   return result;
 }
 
-const BACKGROUND_ANCHORS: Record<BackgroundPosition, { fx: number; fy: number; node: string }> = {
-  center: { fx: 0.5, fy: 0.5, node: 'center' },
-  top: { fx: 0.5, fy: 1, node: 'north' },
-  bottom: { fx: 0.5, fy: 0, node: 'south' },
-  left: { fx: 0, fy: 0.5, node: 'west' },
-  right: { fx: 1, fy: 0.5, node: 'east' },
-  'top-left': { fx: 0, fy: 1, node: 'north west' },
-  'top-right': { fx: 1, fy: 1, node: 'north east' },
-  'bottom-left': { fx: 0, fy: 0, node: 'south west' },
-  'bottom-right': { fx: 1, fy: 0, node: 'south east' },
+const BACKGROUND_NODE_ANCHORS: Record<BackgroundPosition, string> = {
+  center: 'center',
+  top: 'north',
+  bottom: 'south',
+  left: 'west',
+  right: 'east',
+  'top-left': 'north west',
+  'top-right': 'north east',
+  'bottom-left': 'south west',
+  'bottom-right': 'south east',
 };
 
 /** Beamer's fixed paper sizes in millimetres, matching aspectratio=169 vs default. */
@@ -175,32 +178,42 @@ function mm(value: number): string {
 }
 
 /**
- * Replaces beamer's canvas with a solid fill and the positioned image on top.
+ * Replaces beamer's canvas with a solid fill and the layer stack on top.
  * Uses explicit page coordinates instead of tikz's current page, which would
  * need two LaTeX runs to resolve.
  */
 function backgroundCanvasCommands(
-  image: BackgroundImageSettings,
-  name: string,
+  layers: BackgroundImageSettings[],
+  names: Map<string, string>,
+  slot: string,
   paper: { w: number; h: number },
 ): string[] {
-  const anchor = BACKGROUND_ANCHORS[image.position];
-  const size =
-    image.mode === 'stretch'
-      ? 'width=\\paperwidth,height=\\paperheight'
-      : image.mode === 'fit'
-        ? 'width=\\paperwidth,height=\\paperheight,keepaspectratio'
-        : `width=${mm(((paper.w * image.scale) / 100))}`;
   const pageBox = `(0,0) rectangle (${mm(paper.w)},${mm(paper.h)})`;
-  return [
+  const commands = [
     '\\usebackgroundtemplate{%',
     '  \\begin{tikzpicture}',
     `    \\useasboundingbox ${pageBox};`,
     `    \\fill[bxBackgroundFill] ${pageBox};`,
-    `    \\node[anchor=${anchor.node},inner sep=0pt,opacity=${(image.opacity / 100).toFixed(2)}] at (${mm(anchor.fx * paper.w)},${mm(anchor.fy * paper.h)}) {\\includegraphics[${size}]{${name}}};`,
-    '  \\end{tikzpicture}%',
-    '}',
   ];
+  layers.forEach((layer, index) => {
+    const name = names.get(`bg:${slot}:${index}`);
+    if (!name) return;
+    const anchor = BACKGROUND_ANCHOR_FRACTIONS[layer.position];
+    const size =
+      layer.mode === 'stretch'
+        ? 'width=\\paperwidth,height=\\paperheight'
+        : layer.mode === 'fit'
+          ? 'width=\\paperwidth,height=\\paperheight,keepaspectratio'
+          : `width=${mm(((paper.w * layer.scale) / 100))}`;
+    const x = paper.w * (anchor.x + layer.offsetX / 100);
+    // Positive vertical offsets move down on screen, so they subtract from tikz's y.
+    const y = paper.h * (1 - anchor.y - layer.offsetY / 100);
+    commands.push(
+      `    \\node[anchor=${BACKGROUND_NODE_ANCHORS[layer.position]},inner sep=0pt,opacity=${(layer.opacity / 100).toFixed(2)}] at (${mm(x)},${mm(y)}) {\\includegraphics[${size}]{${name}}};`,
+    );
+  });
+  commands.push('  \\end{tikzpicture}%', '}');
+  return commands;
 }
 
 function backgroundFillCommands(paper: { w: number; h: number }): string[] {
@@ -216,7 +229,7 @@ function backgroundFillCommands(paper: { w: number; h: number }): string[] {
 }
 
 export interface LatexImage {
-  /** 'block:<id>' for image blocks, 'bg:<slot>' for slide backgrounds. */
+  /** 'block:<id>' for image blocks, 'bg:<slot>:<index>' for background layers. */
   key: string;
   name: string;
   dataUrl: string;
@@ -251,8 +264,9 @@ export function collectImages(deck: Deck): LatexImage[] {
   for (const slide of deck.slides) visit(slide.body);
   const backgrounds = deck.theme.backgrounds;
   for (const slot of ['all', 'title', 'section'] as const) {
-    const background = backgrounds[slot];
-    if (background?.src) add(`bg:${slot}`, background.name || 'background', background.src);
+    backgrounds[slot].forEach((layer, index) => {
+      if (layer.src) add(`bg:${slot}:${index}`, layer.name || 'background', layer.src);
+    });
   }
   return images;
 }
@@ -470,8 +484,8 @@ export function toLatex(deck: Deck): string {
   const spec = themeSpec(theme.template);
   const lines: string[] = [];
   const resolved = resolveTheme(theme, deck.aspect, settings.fontSize);
-  const hasBackgrounds = Boolean(
-    theme.backgrounds.all || theme.backgrounds.title || theme.backgrounds.section,
+  const hasBackgrounds = (['all', 'title', 'section'] as const).some(
+    (slot) => theme.backgrounds[slot].length > 0,
   );
 
   lines.push('% !TeX program = xelatex');
@@ -642,12 +656,11 @@ export function toLatex(deck: Deck): string {
   for (const slide of deck.slides) {
     if (hasBackgrounds) {
       const background = resolveSlideBackground(theme.backgrounds, slide.kind);
-      const backgroundName = background ? imageNames.get(`bg:${background.slot}`) : undefined;
-      const key = backgroundName ? `bg:${background?.slot}` : 'fill';
+      const key = background ? `bg:${background.slot}` : 'fill';
       if (key !== appliedBackground) {
         lines.push(
-          ...(background && backgroundName
-            ? backgroundCanvasCommands(background.image, backgroundName, paper)
+          ...(background
+            ? backgroundCanvasCommands(background.layers, imageNames, background.slot, paper)
             : backgroundFillCommands(paper)),
         );
         lines.push('');
