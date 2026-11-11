@@ -1,5 +1,7 @@
 import type { FontId, FontSizePt } from '../model/types';
 
+export type ScriptCoverage = 'greek' | 'cyrillic';
+
 export interface FontOption {
   id: FontId;
   label: string;
@@ -10,6 +12,8 @@ export interface FontOption {
   tex: string;
   /** Stack used for the live preview. */
   css: string;
+  /** Non-Latin scripts this face is known to contain; omitted means Latin only. */
+  scripts?: ScriptCoverage[];
   monoTex?: string;
   monoCss?: string;
 }
@@ -323,6 +327,50 @@ export const FONT_OPTIONS: FontOption[] = [
 ];
 
 export const FONT_IDS: FontId[] = [...FONT_OPTIONS.map((option) => option.id), CUSTOM_FONT_ID];
+
+/**
+ * Faces with verified Greek and Cyrillic coverage. Latin Modern, EB Garamond
+ * and the TeX Gyre families are left out, so the export falls back for them
+ * instead of risking blank glyphs.
+ */
+const SCRIPT_COVERAGE: Partial<Record<FontId, ScriptCoverage[]>> = {
+  'libertinus-sans': ['greek', 'cyrillic'],
+  'libertinus-serif': ['greek', 'cyrillic'],
+  'fira-sans': ['greek', 'cyrillic'],
+  'source-sans-pro': ['greek', 'cyrillic'],
+  'dejavu-sans': ['greek', 'cyrillic'],
+  'dejavu-serif': ['greek', 'cyrillic'],
+  'noto-sans': ['greek', 'cyrillic'],
+  'noto-serif': ['greek', 'cyrillic'],
+  arial: ['greek', 'cyrillic'],
+  calibri: ['greek', 'cyrillic'],
+  'segoe-ui': ['greek', 'cyrillic'],
+  verdana: ['greek', 'cyrillic'],
+  tahoma: ['greek', 'cyrillic'],
+  'trebuchet-ms': ['greek', 'cyrillic'],
+  'times-new-roman': ['greek', 'cyrillic'],
+  georgia: ['greek', 'cyrillic'],
+  cambria: ['greek', 'cyrillic'],
+  'palatino-linotype': ['greek', 'cyrillic'],
+  inter: ['greek', 'cyrillic'],
+  roboto: ['greek', 'cyrillic'],
+  'open-sans': ['greek', 'cyrillic'],
+  lato: ['greek', 'cyrillic'],
+  montserrat: ['cyrillic'],
+  'source-serif-pro': ['greek', 'cyrillic'],
+};
+
+for (const option of FONT_OPTIONS) {
+  const scripts = SCRIPT_COVERAGE[option.id];
+  if (scripts) option.scripts = scripts;
+}
+
+/** Fallback order for script text when the chosen face cannot supply it. */
+export function scriptFallbackChain(kind: 'sans' | 'serif'): string[] {
+  return kind === 'serif'
+    ? ['Noto Serif', 'DejaVu Serif', 'Times New Roman', 'Georgia']
+    : ['Noto Sans', 'DejaVu Sans', 'Segoe UI', 'Arial'];
+}
 
 /** Keeps user-typed family names safe for fontspec braces and CSS strings. */
 export function sanitizeFontName(value: unknown): string {

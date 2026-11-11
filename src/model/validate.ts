@@ -1,5 +1,5 @@
 import { COLOR_THEME_NAMES, THEME_SPECS } from '../themes/beamerThemes';
-import { FONT_IDS, FONT_SIZES, sanitizeFontName } from '../themes/fonts';
+import { CUSTOM_FONT_ID, FONT_IDS, FONT_SIZES, sanitizeFontName } from '../themes/fonts';
 import { LANGUAGE_IDS } from '../themes/languages';
 import { wrapInColumns } from './blockOps';
 import { DEFAULT_DOCUMENT, DEFAULT_META, DEFAULT_THEME } from './defaults';
@@ -205,7 +205,14 @@ function validDocument(value: unknown): DocumentSettings {
   const fontSize = (FONT_SIZES as number[]).includes(raw.fontSize as number)
     ? (raw.fontSize as DocumentSettings['fontSize'])
     : DEFAULT_DOCUMENT.fontSize;
-  return { mainLanguage, otherLanguages, fontSize };
+  const scriptFont =
+    raw.scriptFont === 'auto' ||
+    (typeof raw.scriptFont === 'string' &&
+      raw.scriptFont !== CUSTOM_FONT_ID &&
+      (FONT_IDS as string[]).includes(raw.scriptFont))
+      ? (raw.scriptFont as DocumentSettings['scriptFont'])
+      : DEFAULT_DOCUMENT.scriptFont;
+  return { mainLanguage, otherLanguages, fontSize, scriptFont };
 }
 
 function validTheme(value: unknown): ThemeSettings {

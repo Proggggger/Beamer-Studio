@@ -2,7 +2,7 @@ import { splitParagraphs } from '../model/paragraphs';
 import type { Block, BlockColorOverrides, BlockTone, Deck, ImageBlock, Item, Slide } from '../model/types';
 import { themeSpec } from '../themes/beamerThemes';
 import { readableOn, shade } from '../themes/colorMath';
-import { resolveFont } from '../themes/fonts';
+import { resolveFont, scriptFallbackChain } from '../themes/fonts';
 import { languageOption, languageScripts } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
 
@@ -64,6 +64,85 @@ function hasCode(blocks: Block[]): boolean {
   });
 }
 
+interface ScriptWrap {
+  greek?: string;
+  cyrillic?: string;
+}
+
+/** XeLaTeX has no per-character fallback, so script runs must switch language. */
+function scriptWrapFor(settings: Deck['document']): ScriptWrap {
+  const wrap: ScriptWrap = {};
+  for (const id of settings.otherLanguages) {
+    const option = languageOption(id);
+    if (option.script === 'greek' && !wrap.greek) wrap.greek = option.tex;
+    if (option.script === 'cyrillic' && !wrap.cyrillic) wrap.cyrillic = option.tex;
+  }
+  return wrap;
+}
+
+const GREEK_CHAR = /\p{Script=Greek}/u;
+const CYRILLIC_CHAR = /\p{Script=Cyrillic}/u;
+const SCRIPT_GLUE = new Set([
+  ' ', '\t', '.', ',', ';', ':', '!', '?', '(', ')', '-', '–', '—', '«', '»',
+  '„', '“', '”', '‘', '’', '…', '"', "'", '/',
+]);
+
+function wrapScriptRuns(text: string, wrap: ScriptWrap, pdfSafe = false): string {
+  if (!wrap.greek && !wrap.cyrillic) return text;
+  let result = '';
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index];
+    if (char === '$') {
+      const end = text.indexOf('$', index + 1);
+      const stop = end === -1 ? text.length : end + 1;
+      result += text.slice(index, stop);
+      index = stop;
+      continue;
+    }
+    if (char === '\\') {
+      let end = index + 1;
+      while (end < text.length && /[A-Za-z@]/.test(text[end])) end += 1;
+      if (end === index + 1 && end < text.length) end += 1;
+      result += text.slice(index, end);
+      index = end;
+      continue;
+    }
+    const script: keyof ScriptWrap | null = GREEK_CHAR.test(char)
+      ? 'greek'
+      : CYRILLIC_CHAR.test(char)
+        ? 'cyrillic'
+        : null;
+    const wrapper = script ? wrap[script] : undefined;
+    if (!script || !wrapper) {
+      result += char;
+      index += 1;
+      continue;
+    }
+    let end = index + 1;
+    while (end < text.length) {
+      const next = text[end];
+      const nextScript: keyof ScriptWrap | null = GREEK_CHAR.test(next)
+        ? 'greek'
+        : CYRILLIC_CHAR.test(next)
+          ? 'cyrillic'
+          : null;
+      if (nextScript) {
+        if (nextScript !== script) break;
+      } else if (!/[0-9]/.test(next) && !SCRIPT_GLUE.has(next)) {
+        break;
+      }
+      end += 1;
+    }
+    const run = text.slice(index, end);
+    result += pdfSafe
+      ? `\\texorpdfstring{\\text${wrapper}{${run}}}{${run}}`
+      : `\\text${wrapper}{${run}}`;
+    index = end;
+  }
+  return result;
+}
+
 export interface LatexImage {
   name: string;
   dataUrl: string;
@@ -97,11 +176,14 @@ export function collectImages(deck: Deck): LatexImage[] {
   return images;
 }
 
+type WrapText = (text: string) => string;
+
 function renderList(
   items: Item[],
   ordered: boolean,
   lines: string[],
   level: number,
+  wrapText: WrapText,
 ): void {
   const env = ordered ? 'enumerate' : 'itemize';
   lines.push(`${pad(level)}\\begin{${env}}`);
@@ -117,7 +199,7 @@ function renderList(
       depth -= 1;
     }
     if (item.pause) lines.push(`${pad(level + depth + 1)}\\pause`);
-    lines.push(`${pad(level + depth + 1)}\\item ${item.text}`);
+    lines.push(`${pad(level + depth + 1)}\\item ${wrapText(item.text)}`);
   });
   while (depth > 0) {
     lines.push(`${pad(level + depth)}\\end{${env}}`);
@@ -140,11 +222,12 @@ function renderBlocks(
   lines: string[],
   level: number,
   imageNames: Map<string, string>,
+  wrapText: WrapText,
 ): void {
   for (const block of blocks) {
     switch (block.type) {
       case 'paragraph': {
-        const text = paragraphText(block.text, block.indent);
+        const text = paragraphText(wrapText(block.text), block.indent);
         const env =
           block.align === 'center' ? 'center' : block.align === 'right' ? 'flushright' : null;
         if (env) {
@@ -158,7 +241,7 @@ function renderBlocks(
         break;
       }
       case 'list':
-        renderList(block.items, block.ordered, lines, level);
+        renderList(block.items, block.ordered, lines, level, wrapText);
         lines.push('');
         break;
       case 'block': {
@@ -169,8 +252,8 @@ function renderBlocks(
           colors && (colors.titleBg || colors.titleFg || colors.bodyBg || colors.bodyFg),
         );
         if (!hasOverride) {
-          lines.push(`${pad(level)}\\begin{${env}}{${block.title}}`);
-          renderBlocks(block.body, lines, level + 1, imageNames);
+          lines.push(`${pad(level)}\\begin{${env}}{${wrapText(block.title)}}`);
+          renderBlocks(block.body, lines, level + 1, imageNames, wrapText);
           lines.push(`${pad(level)}\\end{${env}}`);
           lines.push('');
           break;
@@ -187,8 +270,8 @@ function renderBlocks(
         if (titleSpec) lines.push(`${pad(level + 1)}${titleSpec}`);
         const bodySpec = blockColorSet(colors ?? {}, 'body', targets.body, define);
         if (bodySpec) lines.push(`${pad(level + 1)}${bodySpec}`);
-        lines.push(`${pad(level + 1)}\\begin{${env}}{${block.title}}`);
-        renderBlocks(block.body, lines, level + 2, imageNames);
+        lines.push(`${pad(level + 1)}\\begin{${env}}{${wrapText(block.title)}}`);
+        renderBlocks(block.body, lines, level + 2, imageNames, wrapText);
         lines.push(`${pad(level + 1)}\\end{${env}}`);
         lines.push(`${pad(level)}}`);
         lines.push('');
@@ -197,10 +280,10 @@ function renderBlocks(
       case 'columns':
         lines.push(`${pad(level)}\\begin{columns}[T]`);
         lines.push(`${pad(level + 1)}\\begin{column}{0.48\\textwidth}`);
-        renderBlocks(block.left, lines, level + 2, imageNames);
+        renderBlocks(block.left, lines, level + 2, imageNames, wrapText);
         lines.push(`${pad(level + 1)}\\end{column}`);
         lines.push(`${pad(level + 1)}\\begin{column}{0.48\\textwidth}`);
-        renderBlocks(block.right, lines, level + 2, imageNames);
+        renderBlocks(block.right, lines, level + 2, imageNames, wrapText);
         lines.push(`${pad(level + 1)}\\end{column}`);
         lines.push(`${pad(level)}\\end{columns}`);
         lines.push('');
@@ -218,7 +301,7 @@ function renderBlocks(
           lines.push(
             `${pad(level + 1)}\\includegraphics[width=${width.toFixed(2)}\\textwidth]{${name}}`,
           );
-          lines.push(`${pad(level + 1)}\\caption{${block.caption}}`);
+          lines.push(`${pad(level + 1)}\\caption{${wrapText(block.caption)}}`);
           lines.push(`${pad(level)}\\end{figure}`);
         } else {
           lines.push(
@@ -252,6 +335,8 @@ function renderSlide(
   slide: Slide,
   lines: string[],
   imageNames: Map<string, string>,
+  wrapText: WrapText,
+  wrapTitle: WrapText,
 ): void {
   if (slide.kind === 'title') {
     lines.push('\\begin{frame}[plain]');
@@ -262,7 +347,7 @@ function renderSlide(
   }
 
   if (slide.kind === 'section') {
-    lines.push(`\\section{${slide.title}}`);
+    lines.push(`\\section{${wrapTitle(slide.title)}}`);
     lines.push('\\begin{frame}');
     lines.push(`${pad(1)}\\sectionpage`);
     lines.push('\\end{frame}');
@@ -275,8 +360,10 @@ function renderSlide(
   // Beamer treats a braced group right after the title argument as the frame
   // subtitle, so both groups must always be present; otherwise a leading
   // color-override group would be swallowed into the title.
-  lines.push(`\\begin{frame}${options}{${slide.title}}{${slide.subtitle ?? ''}}`);
-  renderBlocks(slide.body, lines, 1, imageNames);
+  lines.push(
+    `\\begin{frame}${options}{${wrapTitle(slide.title)}}{${wrapTitle(slide.subtitle ?? '')}}`,
+  );
+  renderBlocks(slide.body, lines, 1, imageNames, wrapText);
   lines.push('\\end{frame}');
   lines.push('');
 }
@@ -345,21 +432,38 @@ export function toLatex(deck: Deck): string {
   lines.push(`\\IfFontExistsTF{${mono}}{\\setmonofont{${mono}}}{}`);
 
   if (scripts.has('greek') || scripts.has('cyrillic')) {
-    // Script fonts need explicit declarations under fontspec; fall back to any
-    // installed face that carries Greek and Cyrillic coverage.
+    // Script fonts need explicit declarations under fontspec. Prefer the face
+    // the user chose (the main font when it has the glyphs), then any installed
+    // face known to carry Greek/Cyrillic coverage.
     lines.push('\\newcommand{\\bxscriptfonts}[1]{%');
     lines.push('  \\newfontfamily\\greekfont{#1}%');
     lines.push('  \\newfontfamily\\greekfontsf{#1}%');
     lines.push('  \\newfontfamily\\cyrillicfont{#1}%');
     lines.push('  \\newfontfamily\\cyrillicfontsf{#1}%');
     lines.push('}');
-    lines.push('\\IfFontExistsTF{Noto Serif}{\\bxscriptfonts{Noto Serif}}{%');
-    lines.push('  \\IfFontExistsTF{DejaVu Serif}{\\bxscriptfonts{DejaVu Serif}}{%');
-    lines.push('    \\IfFontExistsTF{Times New Roman}{\\bxscriptfonts{Times New Roman}}{%');
-    lines.push('      \\bxscriptfonts{Arial}%');
-    lines.push('    }%');
-    lines.push('  }%');
-    lines.push('}');
+    const scriptChoice =
+      settings.scriptFont === 'auto' ? null : resolveFont(settings.scriptFont, '');
+    const scriptKind = scriptChoice ? scriptChoice.kind : font.kind;
+    const chain: string[] = [];
+    if (scriptChoice) {
+      chain.push(scriptChoice.tex);
+    } else if ((font.scripts ?? []).some((script) => scripts.has(script))) {
+      chain.push(font.tex);
+    }
+    for (const candidate of scriptFallbackChain(scriptKind)) {
+      if (!chain.includes(candidate)) chain.push(candidate);
+    }
+    lines.push(`\\IfFontExistsTF{${chain[0]}}{\\bxscriptfonts{${chain[0]}}}{%`);
+    for (let index = 1; index < chain.length; index += 1) {
+      const indent = '  '.repeat(index);
+      lines.push(`${indent}\\IfFontExistsTF{${chain[index]}}{\\bxscriptfonts{${chain[index]}}}{%`);
+    }
+    lines.push(
+      `${'  '.repeat(chain.length)}\\PackageWarning{beamer-editor}{No installed font provides the Greek or Cyrillic glyphs}%`,
+    );
+    for (let index = chain.length - 1; index >= 0; index -= 1) {
+      lines.push(`${'  '.repeat(index)}}%`);
+    }
   }
 
   if (theme.custom.enabled) {
@@ -423,19 +527,24 @@ export function toLatex(deck: Deck): string {
     lines.push('\\setbeamertemplate{navigation symbols}{}');
   }
 
+  const scriptWrap = scriptWrapFor(settings);
+  const wrapText: WrapText = (value) => wrapScriptRuns(value, scriptWrap);
+  // Titles also feed PDF bookmarks/metadata, where language commands are illegal.
+  const wrapTitle: WrapText = (value) => wrapScriptRuns(value, scriptWrap, true);
+
   lines.push('');
-  lines.push(`\\title{${deck.meta.title}}`);
-  if (deck.meta.subtitle) lines.push(`\\subtitle{${deck.meta.subtitle}}`);
-  if (deck.meta.author) lines.push(`\\author{${deck.meta.author}}`);
-  if (deck.meta.institute) lines.push(`\\institute{${deck.meta.institute}}`);
-  if (deck.meta.date) lines.push(`\\date{${deck.meta.date}}`);
+  lines.push(`\\title{${wrapTitle(deck.meta.title)}}`);
+  if (deck.meta.subtitle) lines.push(`\\subtitle{${wrapTitle(deck.meta.subtitle)}}`);
+  if (deck.meta.author) lines.push(`\\author{${wrapTitle(deck.meta.author)}}`);
+  if (deck.meta.institute) lines.push(`\\institute{${wrapTitle(deck.meta.institute)}}`);
+  if (deck.meta.date) lines.push(`\\date{${wrapTitle(deck.meta.date)}}`);
   lines.push('');
   lines.push('\\begin{document}');
   lines.push('');
 
   const images = collectImages(deck);
   const imageNames = new Map(images.map((image) => [image.block.id, image.name]));
-  for (const slide of deck.slides) renderSlide(slide, lines, imageNames);
+  for (const slide of deck.slides) renderSlide(slide, lines, imageNames, wrapText, wrapTitle);
 
   lines.push('\\end{document}');
   lines.push('');

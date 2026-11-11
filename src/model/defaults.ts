@@ -26,6 +26,7 @@ export const DEFAULT_DOCUMENT: DocumentSettings = {
   mainLanguage: 'english',
   otherLanguages: [],
   fontSize: 11,
+  scriptFont: 'auto',
 };
 
 function titleSlide(): Slide {

@@ -69,6 +69,7 @@ describe('toLatex preamble', () => {
           mainLanguage: 'russian',
           otherLanguages: ['english', 'greek'],
           fontSize: 11,
+          scriptFont: 'auto',
         },
       }),
     );
@@ -77,6 +78,30 @@ describe('toLatex preamble', () => {
     expect(tex).toContain('\\setotherlanguage{greek}');
     expect(tex).toContain('\\newfontfamily\\greekfont');
     expect(tex).toContain('\\newfontfamily\\cyrillicfontsf');
+  });
+
+  it('uses the main font for script text when it covers the script', () => {
+    const tex = toLatex(
+      deck({
+        theme: { ...DEFAULT_THEME, fontFamily: 'arial' },
+        document: { ...DEFAULT_DOCUMENT, otherLanguages: ['russian'], scriptFont: 'auto' },
+      }),
+    );
+    expect(tex).toContain('\\IfFontExistsTF{Arial}{\\bxscriptfonts{Arial}}{%');
+    expect(tex.indexOf('\\bxscriptfonts{Arial}')).toBeLessThan(
+      tex.indexOf('\\bxscriptfonts{Noto Sans}'),
+    );
+  });
+
+  it('honors an explicit script font over the main font', () => {
+    const tex = toLatex(
+      deck({
+        theme: { ...DEFAULT_THEME, fontFamily: 'latin-modern-roman' },
+        document: { ...DEFAULT_DOCUMENT, otherLanguages: ['russian'], scriptFont: 'segoe-ui' },
+      }),
+    );
+    expect(tex).toContain('\\IfFontExistsTF{Segoe UI}{\\bxscriptfonts{Segoe UI}}{%');
+    expect(tex).not.toContain('\\bxscriptfonts{Latin Modern Roman}');
   });
 
   it('uses the chosen font with a Latin Modern fallback and the class font size', () => {
@@ -173,6 +198,95 @@ describe('toLatex preamble', () => {
     expect(tex).toContain('\\setbeamertemplate{itemize item}{$\\blacksquare$}');
     expect(tex).toContain('\\setbeamertemplate{blocks}[default]');
     expect(tex).toContain('\\setbeamertemplate{navigation symbols}{}');
+  });
+});
+
+describe('script run wrapping', () => {
+  const mixed = deck({
+    document: { ...DEFAULT_DOCUMENT, otherLanguages: ['russian', 'greek'] },
+    slides: [
+      frame(
+        [
+          { id: 'p', type: 'paragraph', text: 'Hello Привет, world! Ελληνικά text' },
+          {
+            id: 'l',
+            type: 'list',
+            ordered: false,
+            items: [{ id: 'i', text: 'Привет мир', depth: 0 }],
+          },
+        ],
+        { title: 'Frame Привет' },
+      ),
+    ],
+  });
+
+  it('switches language around Greek and Cyrillic runs only', () => {
+    const tex = toLatex(mixed);
+    expect(tex).toContain('Hello \\textrussian{Привет, }world! \\textgreek{Ελληνικά }text');
+    expect(tex).toContain('\\item \\textrussian{Привет мир}');
+  });
+
+  it('keeps math and control sequences untouched', () => {
+    const tex = toLatex(
+      deck({
+        document: { ...DEFAULT_DOCUMENT, otherLanguages: ['russian'] },
+        slides: [
+          frame([
+            {
+              id: 'p',
+              type: 'paragraph',
+              text: 'Cost $Привет + 1$ and \\textbf{Привет} stays.',
+            },
+          ]),
+        ],
+      }),
+    );
+    expect(tex).toContain('$Привет + 1$');
+    expect(tex).toContain('\\textbf{\\textrussian{Привет}} stays.');
+  });
+
+  it('does nothing when no script language is declared', () => {
+    const tex = toLatex(
+      deck({
+        document: { ...DEFAULT_DOCUMENT, otherLanguages: ['german'] },
+        slides: [frame([{ id: 'p', type: 'paragraph', text: 'Hello Привет Ελληνικά' }])],
+      }),
+    );
+    expect(tex).not.toContain('\\textrussian');
+    expect(tex).not.toContain('\\textgreek');
+  });
+
+  it('protects bookmark fields with texorpdfstring', () => {
+    const tex = toLatex(
+      deck({
+        meta: { ...DEFAULT_META, title: 'Отчёт' },
+        document: { ...DEFAULT_DOCUMENT, otherLanguages: ['russian'] },
+        slides: [frame([], { title: 'Привет' })],
+      }),
+    );
+    expect(tex).toContain('\\title{\\texorpdfstring{\\textrussian{Отчёт}}{Отчёт}}');
+    expect(tex).toContain('\\begin{frame}{\\texorpdfstring{\\textrussian{Привет}}{Привет}}{}');
+  });
+
+  it('does not wrap block titles as bookmark strings', () => {
+    const tex = toLatex(
+      deck({
+        document: { ...DEFAULT_DOCUMENT, otherLanguages: ['russian'] },
+        slides: [
+          frame([
+            {
+              id: 'b',
+              type: 'block',
+              tone: 'normal',
+              title: 'Привет',
+              body: [{ id: 'p', type: 'paragraph', text: 'Body' }],
+            },
+          ]),
+        ],
+      }),
+    );
+    expect(tex).toContain('\\begin{block}{\\textrussian{Привет}}');
+    expect(tex).not.toContain('\\begin{block}{\\texorpdfstring');
   });
 });
 

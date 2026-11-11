@@ -5,7 +5,7 @@ import type { CustomColors, FontId, FontSizePt, LanguageId } from '../model/type
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
 import { TRANSPARENT } from '../themes/colorMath';
 import { FONT_OPTIONS, FONT_SIZES, CUSTOM_FONT_ID, resolveFont } from '../themes/fonts';
-import { LANGUAGE_OPTIONS, languageOption } from '../themes/languages';
+import { LANGUAGE_OPTIONS, languageOption, languageScripts } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
 import { ScaledSlide } from '../render/SlideCanvas';
 import { ColorField } from './ColorField';
@@ -183,6 +183,17 @@ function LayoutSettings() {
     { label: 'Windows system fonts', options: FONT_OPTIONS.filter((option) => option.source === 'system') },
     { label: 'Web / Google fonts', options: FONT_OPTIONS.filter((option) => option.source === 'web') },
   ];
+  const neededScripts = languageScripts([document.mainLanguage, ...document.otherLanguages]);
+  const needsScriptFont = neededScripts.has('greek') || neededScripts.has('cyrillic');
+  const scriptCapable = FONT_OPTIONS.filter((option) =>
+    (option.scripts ?? []).some((script) => neededScripts.has(script)),
+  );
+  const otherFonts = FONT_OPTIONS.filter((option) => !scriptCapable.includes(option));
+  const coverageLabel = (option: (typeof FONT_OPTIONS)[number]) =>
+    (option.scripts ?? [])
+      .filter((script) => neededScripts.has(script))
+      .map((script) => (script === 'greek' ? 'Greek' : 'Cyrillic'))
+      .join(' + ');
 
   const setMainLanguage = (id: LanguageId) =>
     updateDocument({
@@ -314,10 +325,45 @@ function LayoutSettings() {
               ),
             )}
           </div>
+          <p className="panel-hint">
+            Ticked languages switch fonts in the export; Greek and Cyrillic text also needs its
+            language ticked here to get the matching font markup.
+          </p>
         </div>
-        <p className="panel-hint">
-          Greek and Cyrillic scripts pick a fallback face that carries the glyphs.
-        </p>
+        {needsScriptFont ? (
+          <>
+            <Field label="Greek / Cyrillic font">
+              <select
+                value={document.scriptFont}
+                onChange={(event) =>
+                  updateDocument({
+                    scriptFont: event.target.value as FontId | 'auto',
+                  })
+                }
+              >
+                <option value="auto">Automatic — follow the main font</option>
+                <optgroup label="Supports the active script">
+                  {scriptCapable.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label} · {coverageLabel(option)}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Other fonts (may lack the glyphs)">
+                  {otherFonts.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </Field>
+            <p className="panel-hint">
+              Declared for Greek and Cyrillic text in the export. Automatic uses the main
+              font when it supports the script, otherwise a same-style fallback.
+            </p>
+          </>
+        ) : null}
       </section>
 
       <section className="panel-section">

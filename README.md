@@ -44,7 +44,11 @@ npm run preview # serve the production bundle
   system fonts such as Arial, Calibri, Segoe UI and Cambria, or web fonts such
   as Inter and Roboto), enter any other installed family in the custom field,
   set the beamer base size and choose a main language plus any additional
-  polyglossia languages.
+  polyglossia languages. When a Greek or Cyrillic language is active, a second
+  selector chooses the face for those scripts (automatic follows the main font
+  when it carries the glyphs, otherwise it falls back to a same-style face).
+  The export wraps those runs in `\textgreek{...}` / `\textrussian{...}` so
+  XeLaTeX switches fonts instead of dropping the glyphs.
 - **Undo / redo** — `Ctrl+Z` / `Ctrl+Shift+Z`.
 - **Save / Open** — Save downloads a `.beamer.json` project (including embedded
   images); Open restores one. `Ctrl+S` saves, `Ctrl+E` opens the export viewer.

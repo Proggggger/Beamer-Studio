@@ -51,6 +51,7 @@ describe('parseDeck document settings', () => {
       mainLanguage: 'english',
       otherLanguages: [],
       fontSize: 11,
+      scriptFont: 'auto',
     });
   });
 
@@ -87,12 +88,25 @@ describe('parseDeck document settings', () => {
       mainLanguage: 'russian',
       otherLanguages: ['english', 'greek'],
       fontSize: 14,
+      scriptFont: 'auto',
     });
   });
 
   it('falls back to 11pt for an unsupported font size', () => {
     const parsed = parseDeck(legacy({}, { document: { fontSize: 13 } }));
     expect(parsed?.document.fontSize).toBe(11);
+  });
+
+  it('accepts only catalog font ids or auto for the script font', () => {
+    expect(
+      parseDeck(legacy({}, { document: { scriptFont: 'segoe-ui' } }))?.document.scriptFont,
+    ).toBe('segoe-ui');
+    expect(parseDeck(legacy({}, { document: { scriptFont: 'custom' } }))?.document.scriptFont).toBe(
+      'auto',
+    );
+    expect(parseDeck(legacy({}, { document: { scriptFont: 'nonsense' } }))?.document.scriptFont).toBe(
+      'auto',
+    );
   });
 });
 

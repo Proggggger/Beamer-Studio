@@ -130,6 +130,8 @@ export interface DocumentSettings {
   mainLanguage: LanguageId;
   otherLanguages: LanguageId[];
   fontSize: FontSizePt;
+  /** Face used for Greek/Cyrillic text; 'auto' follows the main font when it has the glyphs. */
+  scriptFont: FontId | 'auto';
 }
 
 export interface CustomColors {
