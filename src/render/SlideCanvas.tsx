@@ -70,7 +70,7 @@ function FramePage({
 }: SlideCanvasProps & { editable: boolean }) {
   const updateSlide = useDeckStore((state) => state.updateSlide);
   const geometry = frameGeometry(theme);
-  const { palette, font, spec, layout } = theme;
+  const { palette, font, spec } = theme;
   const barVisible = palette.frametitle.bg !== TRANSPARENT;
   const gradientBars = spec.outer === 'smoothbars' || spec.outer === 'shadow';
   const barBackground = barVisible
@@ -78,12 +78,7 @@ function FramePage({
       ? `linear-gradient(to bottom, ${palette.frametitle.bg}, ${mix(palette.frametitle.bg, '#000000', 84)})`
       : palette.frametitle.bg
     : 'transparent';
-  const titlePadding =
-    spec.inner === 'inmargin'
-      ? layout.margin * 0.35
-      : spec.sidebar
-        ? layout.margin * 0.65
-        : layout.margin * 0.65;
+  const titlePadding = geometry.titlePadding;
   const titleColor = palette.frametitle.fg;
   const twoColumn = slide.layout === 'two-column';
   const subtitleDelta = slide.subtitle ? theme.page.h * 0.045 : 0;

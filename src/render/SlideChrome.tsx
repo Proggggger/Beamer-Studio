@@ -10,6 +10,7 @@ export interface FrameGeometry {
   titleLeft: number;
   titleRight: number;
   titleHeight: number;
+  titlePadding: number;
   contentTop: number;
   contentLeft: number;
   contentRight: number;
@@ -55,8 +56,11 @@ export function frameGeometry(theme: ResolvedTheme): FrameGeometry {
   const footerHeight = footerVisible ? layout.footH : 0;
   const navBottom = footerHeight > 0 ? footerHeight + h * 0.012 : h * 0.018;
 
-  let contentLeft = margin;
-  let contentRight = w - margin;
+  // beamerouterthemeinfolines sets `text margin left/right=1em`; every other
+  // outer theme keeps the default 1cm margin.
+  const contentMargin = spec.outer === 'infolines' ? w * 0.02875 : margin;
+  let contentLeft = contentMargin;
+  let contentRight = w - contentMargin;
   let contentTop = titleTop + titleHeight + h * 0.025;
   let contentBottom = h - (footerVisible ? footerHeight : h * 0.09);
 
@@ -76,6 +80,13 @@ export function frameGeometry(theme: ResolvedTheme): FrameGeometry {
     titleLeft,
     titleRight,
     titleHeight,
+    // Infothemes place the frame title 0.3cm from the bar edge.
+    titlePadding:
+      spec.outer === 'infolines'
+        ? w * 0.01875
+        : spec.inner === 'inmargin'
+          ? margin * 0.35
+          : margin * 0.65,
     contentTop,
     contentLeft,
     contentRight,

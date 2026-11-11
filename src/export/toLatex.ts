@@ -105,7 +105,13 @@ function renderBlocks(
   for (const block of blocks) {
     switch (block.type) {
       case 'paragraph':
-        lines.push(`${pad(level)}${block.text}`);
+        if (block.align === 'center') {
+          lines.push(`${pad(level)}\\begin{center}`);
+          lines.push(`${pad(level + 1)}${block.text}`);
+          lines.push(`${pad(level)}\\end{center}`);
+        } else {
+          lines.push(`${pad(level)}${block.text}`);
+        }
         lines.push('');
         break;
       case 'list':

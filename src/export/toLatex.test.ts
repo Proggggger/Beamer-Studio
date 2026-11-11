@@ -195,6 +195,16 @@ describe('toLatex slides', () => {
     expect(tex).toContain('\\begin{block}{Plain}');
   });
 
+  it('wraps centered paragraphs in center so the export matches the preview', () => {
+    const body: Block[] = [
+      { id: 'p1', type: 'paragraph', text: 'Centered', align: 'center' },
+      { id: 'p2', type: 'paragraph', text: 'Plain' },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toMatch(/\\begin\{center\}\s+Centered\s+\\end\{center\}/);
+    expect(tex).not.toMatch(/\\begin\{center\}\s+Plain/);
+  });
+
   it('renders columns with two 0.48 widths', () => {
     const body: Block[] = [
       {
