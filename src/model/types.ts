@@ -97,7 +97,9 @@ export interface ParagraphBlock {
   id: string;
   type: 'paragraph';
   text: string;
-  align?: 'left' | 'center';
+  align?: 'left' | 'center' | 'right';
+  /** First-line indent in em, matching `\hspace*{...}` in the export. */
+  indent?: number;
 }
 
 export interface ListBlock {

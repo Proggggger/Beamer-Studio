@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react';
+import { splitParagraphs } from '../model/paragraphs';
 import { useDeckStore } from '../model/store';
 import type { Block, Deck, ImageBlock, ListBlock } from '../model/types';
 import type { ResolvedTheme } from '../themes/resolve';
@@ -317,7 +318,10 @@ export function BlockView({ block, ...context }: BlockViewProps) {
   const baseClass = `bx-block bx-block-${block.type}${selected ? ' is-selected' : ''}`;
 
   switch (block.type) {
-    case 'paragraph':
+    case 'paragraph': {
+      const alignClass =
+        block.align === 'center' ? ' is-center' : block.align === 'right' ? ' is-right' : '';
+      const indent = block.indent && block.indent > 0 ? Math.min(8, block.indent) : 0;
       return (
         <div
           className={baseClass}
@@ -329,7 +333,15 @@ export function BlockView({ block, ...context }: BlockViewProps) {
             value={block.text}
             multiline
             placeholder="Paragraph"
-            className={`bx-paragraph${block.align === 'center' ? ' is-center' : ''}`}
+            className={`bx-paragraph${alignClass}`}
+            style={indent > 0 ? { textIndent: `${indent}em` } : undefined}
+            render={(value) =>
+              splitParagraphs(value).map((part, index) => (
+                <span className="bx-para-line" key={index}>
+                  <Inline text={part} />
+                </span>
+              ))
+            }
             onChange={(text) =>
               updateBlock(
                 block.id,
@@ -341,6 +353,7 @@ export function BlockView({ block, ...context }: BlockViewProps) {
           />
         </div>
       );
+    }
     case 'list':
       return (
         <div

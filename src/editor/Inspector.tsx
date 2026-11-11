@@ -181,7 +181,7 @@ function ParagraphEditor({ block }: { block: Extract<Block, { type: 'paragraph' 
       <div className="segmented">
         <button
           type="button"
-          className={block.align !== 'center' ? 'is-active' : ''}
+          className={!block.align || block.align === 'left' ? 'is-active' : ''}
           onClick={() =>
             updateBlock(block.id, (target) =>
               target.type === 'paragraph' ? { ...target, align: 'left' } : target,
@@ -201,7 +201,38 @@ function ParagraphEditor({ block }: { block: Extract<Block, { type: 'paragraph' 
         >
           Center
         </button>
+        <button
+          type="button"
+          className={block.align === 'right' ? 'is-active' : ''}
+          onClick={() =>
+            updateBlock(block.id, (target) =>
+              target.type === 'paragraph' ? { ...target, align: 'right' } : target,
+            )
+          }
+        >
+          Right
+        </button>
       </div>
+      <Field label={`First-line indent · ${block.indent ?? 0}em`}>
+        <input
+          type="range"
+          min={0}
+          max={4}
+          step={0.25}
+          value={block.indent ?? 0}
+          onChange={(event) => {
+            const indent = Number(event.target.value);
+            updateBlock(
+              block.id,
+              (target) =>
+                target.type === 'paragraph'
+                  ? { ...target, indent: indent > 0 ? indent : undefined }
+                  : target,
+              `paragraph:${block.id}:indent`,
+            );
+          }}
+        />
+      </Field>
     </>
   );
 }

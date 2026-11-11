@@ -1452,8 +1452,17 @@ button:disabled {
 }
 
 .bx-paragraph.is-center {
-  display: block;
   text-align: center;
+}
+
+.bx-paragraph.is-right {
+  text-align: right;
+}
+
+/* A blank line starts a new TeX paragraph; beamer keeps parskip/parindent at 0,
+   so the lines sit together with no extra gap. */
+.bx-para-line {
+  display: block;
 }
 
 .bx-list {

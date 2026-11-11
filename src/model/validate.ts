@@ -31,7 +31,11 @@ function validBlocks(value: unknown, depth = 0): Block[] {
           id,
           type: 'paragraph',
           text: str(raw.text),
-          align: raw.align === 'center' ? 'center' : 'left',
+          align: raw.align === 'center' || raw.align === 'right' ? raw.align : 'left',
+          indent:
+            typeof raw.indent === 'number' && Number.isFinite(raw.indent) && raw.indent > 0
+              ? Math.min(8, raw.indent)
+              : undefined,
         });
         break;
       case 'list':

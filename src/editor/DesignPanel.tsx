@@ -168,7 +168,7 @@ function ColorGallery() {
     <>
       <div className="color-gallery">
         {previews.map(({ name, deck: previewDeck, resolved: previewTheme }) => {
-          const scale = 120 / previewTheme.page.w;
+          const scale = 96 / previewTheme.page.w;
           return (
             <button
               key={name}

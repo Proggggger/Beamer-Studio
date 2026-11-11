@@ -205,6 +205,30 @@ describe('toLatex slides', () => {
     expect(tex).not.toMatch(/\\begin\{center\}\s+Plain/);
   });
 
+  it('wraps right-aligned paragraphs in flushright', () => {
+    const body: Block[] = [
+      { id: 'p1', type: 'paragraph', text: 'Right side', align: 'right' },
+      { id: 'p2', type: 'paragraph', text: 'Plain' },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toMatch(/\\begin\{flushright\}\s+Right side\s+\\end\{flushright\}/);
+    expect(tex).not.toMatch(/\\begin\{flushright\}\s+Plain/);
+  });
+
+  it('adds an explicit hspace for first-line indents, one per TeX paragraph', () => {
+    const body: Block[] = [
+      { id: 'p1', type: 'paragraph', text: 'One\n\nTwo', indent: 1.5 },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toContain('\\hspace*{1.5em}One\n\n\\hspace*{1.5em}Two');
+  });
+
+  it('keeps blank lines between paragraph parts in the export', () => {
+    const body: Block[] = [{ id: 'p1', type: 'paragraph', text: 'First\n\nSecond' }];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toContain('First\n\nSecond');
+  });
+
   it('renders columns with two 0.48 widths', () => {
     const body: Block[] = [
       {

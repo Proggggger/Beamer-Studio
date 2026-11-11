@@ -1,3 +1,4 @@
+import { splitParagraphs } from '../model/paragraphs';
 import type { Block, Deck, ImageBlock, Item, Slide } from '../model/types';
 import { themeSpec } from '../themes/beamerThemes';
 import { readableOn, shade } from '../themes/colorMath';
@@ -96,6 +97,15 @@ function renderList(
   lines.push(`${pad(level)}\\end{${env}}`);
 }
 
+/** beamer keeps \parindent at 0pt, so indent gets an explicit horizontal box. */
+function paragraphText(text: string, indent?: number): string {
+  if (!indent || indent <= 0) return text;
+  const prefix = `\\hspace*{${Number(indent.toFixed(2))}em}`;
+  return splitParagraphs(text)
+    .map((part) => `${prefix}${part.replace(/^[ \t]+/, '')}`)
+    .join('\n\n');
+}
+
 function renderBlocks(
   blocks: Block[],
   lines: string[],
@@ -104,16 +114,20 @@ function renderBlocks(
 ): void {
   for (const block of blocks) {
     switch (block.type) {
-      case 'paragraph':
-        if (block.align === 'center') {
-          lines.push(`${pad(level)}\\begin{center}`);
-          lines.push(`${pad(level + 1)}${block.text}`);
-          lines.push(`${pad(level)}\\end{center}`);
+      case 'paragraph': {
+        const text = paragraphText(block.text, block.indent);
+        const env =
+          block.align === 'center' ? 'center' : block.align === 'right' ? 'flushright' : null;
+        if (env) {
+          lines.push(`${pad(level)}\\begin{${env}}`);
+          lines.push(`${pad(level + 1)}${text}`);
+          lines.push(`${pad(level)}\\end{${env}}`);
         } else {
-          lines.push(`${pad(level)}${block.text}`);
+          lines.push(`${pad(level)}${text}`);
         }
         lines.push('');
         break;
+      }
       case 'list':
         renderList(block.items, block.ordered, lines, level);
         lines.push('');
