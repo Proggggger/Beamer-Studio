@@ -1,5 +1,5 @@
 import { COLOR_THEME_NAMES, THEME_SPECS } from '../themes/beamerThemes';
-import { FONT_IDS, FONT_SIZES } from '../themes/fonts';
+import { FONT_IDS, FONT_SIZES, sanitizeFontName } from '../themes/fonts';
 import { LANGUAGE_IDS } from '../themes/languages';
 import { wrapInColumns } from './blockOps';
 import { DEFAULT_DOCUMENT, DEFAULT_META, DEFAULT_THEME } from './defaults';
@@ -223,6 +223,7 @@ function validTheme(value: unknown): ThemeSettings {
     colorTheme,
     custom: validCustom(raw.custom),
     fontFamily: validFontId(raw.fontFamily),
+    customFont: sanitizeFontName(raw.customFont),
     fontScale:
       typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)
         ? Math.max(0.8, Math.min(1.3, raw.fontScale))

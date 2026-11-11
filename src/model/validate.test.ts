@@ -62,6 +62,14 @@ describe('parseDeck document settings', () => {
     );
   });
 
+  it('keeps the custom font id and sanitizes the family name', () => {
+    const parsed = parseDeck(
+      legacy({ fontFamily: 'custom', customFont: 'Bahnschrift}\\lets{x}{' }),
+    );
+    expect(parsed?.theme.fontFamily).toBe('custom');
+    expect(parsed?.theme.customFont).toBe('Bahnschrift lets x');
+  });
+
   it('dedupes additional languages, drops the main one and rejects unknown ids', () => {
     const parsed = parseDeck(
       legacy(

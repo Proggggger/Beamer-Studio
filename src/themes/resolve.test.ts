@@ -52,6 +52,17 @@ describe('resolveTheme', () => {
     expect(resolved.cssVars['--font-mono']).toContain('Fira Mono');
   });
 
+  it('uses a system font stack and sanitized custom families', () => {
+    const arial = resolveTheme(settings({ fontFamily: 'arial' }), '169');
+    expect(arial.font.family).toContain('Arial');
+    expect(arial.font.mono).toContain('Consolas');
+    const custom = resolveTheme(
+      settings({ fontFamily: 'custom', customFont: 'Bahnschrift}"x' }),
+      '169',
+    );
+    expect(custom.font.family).toContain('"Bahnschrift x"');
+  });
+
   it('honors explicit bullet and block shape overrides', () => {
     const rounded = resolveTheme(settings({ bulletShape: 'square', blockShape: 'rectangle' }), '169');
     expect(rounded.layout.bullet).toBe('square');

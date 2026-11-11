@@ -14,6 +14,7 @@ export const DEFAULT_THEME: ThemeSettings = {
   colorTheme: 'whale',
   custom: { enabled: false },
   fontFamily: 'latin-modern-sans',
+  customFont: '',
   fontScale: 1,
   bulletShape: 'theme',
   blockShape: 'theme',

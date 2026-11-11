@@ -4,7 +4,7 @@ import { COLOR_GALLERY_SLIDE, GALLERY_SLIDE } from '../model/defaults';
 import type { CustomColors, FontId, FontSizePt, LanguageId } from '../model/types';
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
 import { TRANSPARENT } from '../themes/colorMath';
-import { FONT_OPTIONS, FONT_SIZES, fontOption } from '../themes/fonts';
+import { FONT_OPTIONS, FONT_SIZES, CUSTOM_FONT_ID, resolveFont } from '../themes/fonts';
 import { LANGUAGE_OPTIONS, languageOption } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
 import { ScaledSlide } from '../render/SlideCanvas';
@@ -177,9 +177,12 @@ function LayoutSettings() {
   const updateTheme = useDeckStore((state) => state.updateTheme);
   const updateDocument = useDeckStore((state) => state.updateDocument);
   const spec = themeSpec(theme.template);
-  const font = fontOption(theme.fontFamily);
-  const sansFonts = FONT_OPTIONS.filter((option) => option.kind === 'sans');
-  const serifFonts = FONT_OPTIONS.filter((option) => option.kind === 'serif');
+  const font = resolveFont(theme.fontFamily, theme.customFont);
+  const fontGroups = [
+    { label: 'TeX fonts', options: FONT_OPTIONS.filter((option) => option.source === 'tex') },
+    { label: 'Windows system fonts', options: FONT_OPTIONS.filter((option) => option.source === 'system') },
+    { label: 'Web / Google fonts', options: FONT_OPTIONS.filter((option) => option.source === 'web') },
+  ];
 
   const setMainLanguage = (id: LanguageId) =>
     updateDocument({
@@ -223,24 +226,32 @@ function LayoutSettings() {
             value={theme.fontFamily}
             onChange={(event) => updateTheme({ fontFamily: event.target.value as FontId })}
           >
-            <optgroup label="Sans serif">
-              {sansFonts.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Serif">
-              {serifFonts.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
+            {fontGroups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+            <option value={CUSTOM_FONT_ID}>Custom family…</option>
           </select>
         </Field>
+        {theme.fontFamily === CUSTOM_FONT_ID ? (
+          <Field label="Custom font family">
+            <input
+              value={theme.customFont}
+              placeholder="e.g. Bahnschrift"
+              spellCheck={false}
+              onChange={(event) => updateTheme({ customFont: event.target.value }, 'customFont')}
+            />
+          </Field>
+        ) : null}
         <p className="panel-hint">
-          {font.tex} + {font.monoTex ?? 'Latin Modern Mono'} via fontspec in the export.
+          {theme.fontFamily === CUSTOM_FONT_ID && !theme.customFont.trim()
+            ? 'Type the exact family name fontspec knows; the export falls back to Latin Modern when it is not installed.'
+            : `${font.tex}${font.monoTex ? ` + ${font.monoTex}` : ''} via fontspec in the export; the preview uses it when installed here.`}
         </p>
         <Field label="Base font size">
           <select

@@ -93,6 +93,29 @@ describe('toLatex preamble', () => {
     expect(tex).not.toContain('\\bxscriptfonts');
   });
 
+  it('exports a custom font family with the same guarded fallback', () => {
+    const tex = toLatex(
+      deck({ theme: { ...DEFAULT_THEME, fontFamily: 'custom', customFont: 'Bahnschrift SemiBold' } }),
+    );
+    expect(tex).toContain('\\IfFontExistsTF{Bahnschrift SemiBold}{%');
+    expect(tex).toContain('\\setsansfont{Bahnschrift SemiBold}%');
+  });
+
+  it('strips unsafe characters from a custom font name', () => {
+    const tex = toLatex(
+      deck({ theme: { ...DEFAULT_THEME, fontFamily: 'custom', customFont: 'Evil}\\lets{x}{' } }),
+    );
+    expect(tex).toContain('\\IfFontExistsTF{Evil lets x}{%');
+    expect(tex).not.toContain('Evil}\\');
+  });
+
+  it('falls back to Latin Modern when a custom family is blank', () => {
+    const tex = toLatex(
+      deck({ theme: { ...DEFAULT_THEME, fontFamily: 'custom', customFont: '   ' } }),
+    );
+    expect(tex).toContain('\\IfFontExistsTF{Latin Modern Sans}{%');
+  });
+
   it('omits the aspect ratio for 4:3 decks', () => {
     const tex = toLatex(deck({ aspect: '43' }));
     expect(tex).toContain('\\documentclass[11pt]{beamer}');

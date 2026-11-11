@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDeckStore } from '../model/store';
 import { dataUrlToBlob, downloadBlob, downloadText, slugify } from '../export/download';
 import { collectImages, toLatex } from '../export/toLatex';
-import { fontOption } from '../themes/fonts';
+import { resolveFont } from '../themes/fonts';
 import { languageOption } from '../themes/languages';
 
 export function ExportDialog() {
@@ -13,7 +13,7 @@ export function ExportDialog() {
   const tex = useMemo(() => toLatex(deck), [deck]);
   const images = useMemo(() => collectImages(deck), [deck]);
   const filename = `${slugify(deck.meta.title)}.tex`;
-  const font = fontOption(deck.theme.fontFamily);
+  const font = resolveFont(deck.theme.fontFamily, deck.theme.customFont);
   const mainLanguage = languageOption(deck.document.mainLanguage);
   const extraLanguages = deck.document.otherLanguages.map((id) => languageOption(id).label);
 

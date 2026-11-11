@@ -2,7 +2,7 @@ import { splitParagraphs } from '../model/paragraphs';
 import type { Block, BlockColorOverrides, BlockTone, Deck, ImageBlock, Item, Slide } from '../model/types';
 import { themeSpec } from '../themes/beamerThemes';
 import { readableOn, shade } from '../themes/colorMath';
-import { fontOption } from '../themes/fonts';
+import { resolveFont } from '../themes/fonts';
 import { languageOption, languageScripts } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
 
@@ -317,7 +317,7 @@ export function toLatex(deck: Deck): string {
     }
   }
 
-  const font = fontOption(theme.fontFamily);
+  const font = resolveFont(theme.fontFamily, theme.customFont);
   const languageIds = [settings.mainLanguage, ...settings.otherLanguages];
   const scripts = languageScripts(languageIds);
 

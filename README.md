@@ -40,9 +40,11 @@ npm run preview # serve the production bundle
   switch 16:9 / 4:3, change fonts and font scale, and choose bullet/block shapes
   and navigation symbols.
 - **Fonts and languages** — pick a font family from the Layout panel (Latin
-  Modern, TeX Gyre, Libertinus, Fira, Source Sans, DejaVu, Noto), set the beamer
-  base size and choose a main language plus any additional polyglossia
-  languages.
+  Modern, TeX Gyre, Libertinus, Fira, Source Sans, DejaVu, Noto, Windows
+  system fonts such as Arial, Calibri, Segoe UI and Cambria, or web fonts such
+  as Inter and Roboto), enter any other installed family in the custom field,
+  set the beamer base size and choose a main language plus any additional
+  polyglossia languages.
 - **Undo / redo** — `Ctrl+Z` / `Ctrl+Shift+Z`.
 - **Save / Open** — Save downloads a `.beamer.json` project (including embedded
   images); Open restores one. `Ctrl+S` saves, `Ctrl+E` opens the export viewer.

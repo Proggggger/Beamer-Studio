@@ -74,7 +74,24 @@ export type FontId =
   | 'dejavu-sans'
   | 'dejavu-serif'
   | 'noto-sans'
-  | 'noto-serif';
+  | 'noto-serif'
+  | 'arial'
+  | 'calibri'
+  | 'segoe-ui'
+  | 'verdana'
+  | 'tahoma'
+  | 'trebuchet-ms'
+  | 'times-new-roman'
+  | 'georgia'
+  | 'cambria'
+  | 'palatino-linotype'
+  | 'inter'
+  | 'roboto'
+  | 'open-sans'
+  | 'lato'
+  | 'montserrat'
+  | 'source-serif-pro'
+  | 'custom';
 
 export type LanguageId =
   | 'english'
@@ -129,6 +146,8 @@ export interface ThemeSettings {
   colorTheme: ColorThemeName;
   custom: CustomColors;
   fontFamily: FontId;
+  /** family name typed by the user when fontFamily is 'custom' */
+  customFont: string;
   fontScale: number;
   bulletShape: 'theme' | BulletShape;
   blockShape: 'theme' | BlockShape;

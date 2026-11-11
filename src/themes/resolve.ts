@@ -3,7 +3,7 @@ import type { ThemeSpec } from './beamerThemes';
 import { themeSpec } from './beamerThemes';
 import { applyColorThemes, applyCustomColors, type Palette, type Swatch } from './colorthemes';
 import { mix, TRANSPARENT } from './colorMath';
-import { fontStack, monoStack } from './fonts';
+import { resolveFont, MONO_STACK } from './fonts';
 import { themeBlockRounded, themeBullet } from './typography';
 import type { BlockShape, BulletShape } from '../model/types';
 
@@ -61,14 +61,15 @@ export function resolveTheme(
   // The class option scales beamer's whole font size ladder; 11pt is the base
   // the preview geometry was measured against.
   const base = (page.w / 40) * settings.fontScale * (fontSize / 11);
+  const chosenFont = resolveFont(settings.fontFamily, settings.customFont);
   const font = {
     base,
     title: base * 1.5,
     subtitle: base * 0.95,
     small: base * 0.68,
     tiny: base * 0.56,
-    family: fontStack(settings.fontFamily),
-    mono: monoStack(settings.fontFamily),
+    family: chosenFont.css,
+    mono: chosenFont.monoCss ?? MONO_STACK,
   };
 
   const margin = page.w * 0.05;
