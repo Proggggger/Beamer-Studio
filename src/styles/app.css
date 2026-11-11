@@ -1780,36 +1780,46 @@ button:disabled {
 
 /* -------------------------------- Section page ----------------------------- */
 
-.bx-section-page {
-  display: grid;
-  place-items: center;
+/* Mirrors beamer's default section page: a "Section N" label above a
+   titlelike-colored box, with 2:3 vertical glue (beamer's 1fill/1.5fill). */
+.bx-section-body {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bx-section-spacer {
+  flex-basis: 0;
 }
 
 .bx-section-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(var(--fs-base) * 0.45);
-  width: 80%;
+  flex: 0 0 auto;
+  max-width: 100%;
+  gap: calc(var(--fs-base) * 1);
   text-align: center;
 }
 
-.bx-section-number {
-  font-size: var(--fs-small);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.85;
+.bx-section-name {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.bx-section-band {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .bx-section-title {
   line-height: 1.2;
-  font-weight: 500;
-}
-
-.bx-section-rule {
-  width: 26%;
-  height: 0.12em;
-  opacity: 0.55;
+  font-weight: 400;
+  text-align: center;
 }
 
 /* --------------------------------- Responsive ------------------------------ */

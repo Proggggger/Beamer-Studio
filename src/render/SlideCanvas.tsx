@@ -5,7 +5,7 @@ import type { ResolvedTheme } from '../themes/resolve';
 import { mix, TRANSPARENT } from '../themes/colorMath';
 import { BlockList } from './BlockView';
 import { EditableText } from './EditableText';
-import { FrameChrome, PageNav, frameGeometry } from './SlideChrome';
+import { FrameChrome, frameGeometry } from './SlideChrome';
 import { TitlePage } from './TitlePage';
 
 export interface SlideCanvasProps {
@@ -21,40 +21,74 @@ export interface SlideCanvasProps {
 function SectionPage({
   deck,
   slide,
+  slideIndex,
   theme,
   editable,
 }: {
   deck: Deck;
   slide: Slide;
+  slideIndex: number;
   theme: ResolvedTheme;
   editable: boolean;
 }) {
   const updateSlide = useDeckStore((state) => state.updateSlide);
   const sections = deck.slides.filter((entry) => entry.kind === 'section');
   const number = sections.findIndex((entry) => entry.id === slide.id) + 1;
-  const { palette, font } = theme;
+  const { palette, font, spec, layout, page } = theme;
+  const geometry = frameGeometry(theme);
+  const boxed = palette.titlelike.bg !== TRANSPARENT;
+  const rounded = spec.inner === 'rounded';
+  // Rounded boxes draw 4bp beyond the text column, as beamer's block templates do.
+  const bleed = rounded ? page.w * 0.0088 : 0;
+  const bandWidth = geometry.contentRight - geometry.contentLeft + bleed * 2;
+  const sectionFont = font.base * 1.3;
+  const bandStyle: CSSProperties = {
+    width: bandWidth,
+    marginLeft: -bleed,
+    background: boxed ? palette.titlelike.bg : 'transparent',
+    color: palette.titlelike.fg,
+    borderRadius: rounded ? font.base * 0.3 : 0,
+    boxShadow:
+      boxed && rounded && layout.blockShadow
+        ? `0 ${font.base * 0.12}px ${font.base * 0.4}px rgba(0,0,0,0.32)`
+        : 'none',
+    padding: `${font.base * 0.95}px ${font.base * 1.2}px`,
+  };
 
   return (
     <div className="bx-section-page" data-slide-id={slide.id}>
-      <div className="bx-section-inner">
-        <div className="bx-section-number" style={{ color: palette.structure }}>
-          {number > 0 ? number : ''}
+      <FrameChrome deck={deck} slideIndex={slideIndex} theme={theme} />
+      <div
+        className="bx-section-body"
+        style={{
+          top: geometry.headRows,
+          left: geometry.titleLeft,
+          right: page.w - geometry.titleRight,
+          bottom: geometry.footerHeight,
+        }}
+      >
+        <div className="bx-section-spacer" style={{ flex: 2 }} />
+        <div className="bx-section-inner">
+          <div className="bx-section-name" style={{ color: palette.fg, fontSize: sectionFont }}>
+            Section {number > 0 ? number : ''}
+          </div>
+          <div className="bx-section-band" style={bandStyle}>
+            <div
+              className="bx-section-title"
+              style={{ color: palette.titlelike.fg, fontSize: sectionFont }}
+            >
+              <EditableText
+                editable={editable}
+                value={slide.title}
+                multiline
+                placeholder="Section title"
+                onChange={(title) => updateSlide(slide.id, { title }, `slide-title:${slide.id}`)}
+              />
+            </div>
+          </div>
         </div>
-        <div
-          className="bx-section-title"
-          style={{ color: palette.titlelike.fg, fontSize: font.title * 1.15 }}
-        >
-          <EditableText
-            editable={editable}
-            value={slide.title}
-            multiline
-            placeholder="Section title"
-            onChange={(title) => updateSlide(slide.id, { title }, `slide-title:${slide.id}`)}
-          />
-        </div>
-        <div className="bx-section-rule" style={{ background: palette.structure }} />
+        <div className="bx-section-spacer" style={{ flex: 3 }} />
       </div>
-      <PageNav theme={theme} />
     </div>
   );
 }
@@ -203,6 +237,7 @@ export function SlideCanvas({
         <SectionPage
           deck={deck}
           slide={slide}
+          slideIndex={slideIndex}
           theme={theme}
           editable={editable}
         />

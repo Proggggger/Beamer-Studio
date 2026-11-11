@@ -36,7 +36,13 @@ export function resolveTheme(settings: ThemeSettings, aspect: Aspect): ResolvedT
   const spec = themeSpec(settings.template);
   const layers = [...spec.colorThemes];
   if (!layers.includes(settings.colorTheme)) layers.push(settings.colorTheme);
-  const palette = applyCustomColors(applyColorThemes(layers), settings.custom);
+  const layered = applyColorThemes(layers);
+  // Hannover/Malmoe/Marburg override `titlelike` to parent=structure in their
+  // theme files, so stock Beamer fills nothing behind the section title.
+  const themed = spec.titlelikePlain
+    ? { ...layered, titlelike: { fg: layered.structure, bg: TRANSPARENT } }
+    : layered;
+  const palette = applyCustomColors(themed, settings.custom);
 
   const page = aspect === '169' ? { w: 960, h: 540 } : { w: 800, h: 600 };
   const base = (page.w / 40) * settings.fontScale;

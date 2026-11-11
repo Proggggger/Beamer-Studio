@@ -31,6 +31,8 @@ export interface ThemeSpec {
   inner: InnerFamily;
   colorThemes: ColorThemeName[];
   titlePage: TitlePageStyle;
+  /** Theme .sty resets `titlelike` to `parent=structure`, i.e. text only, no fill. */
+  titlelikePlain?: boolean;
   shadow: boolean;
   frametitleAlign: 'left' | 'center' | 'right';
   sidebar?: SidebarSpec;
@@ -188,6 +190,7 @@ export const THEME_SPECS: Record<ThemeName, ThemeSpec> = {
     inner: 'circles',
     colorThemes: ['seahorse'],
     titlePage: 'box',
+    titlelikePlain: true,
     shadow: false,
     frametitleAlign: 'right',
     sidebar: { side: 'left', widthPct: 0.096, head: false },
@@ -235,6 +238,7 @@ export const THEME_SPECS: Record<ThemeName, ThemeSpec> = {
     inner: 'default',
     colorThemes: ['whale'],
     titlePage: 'box',
+    titlelikePlain: true,
     shadow: false,
     frametitleAlign: 'left',
   },
@@ -244,6 +248,7 @@ export const THEME_SPECS: Record<ThemeName, ThemeSpec> = {
     inner: 'default',
     colorThemes: ['whale'],
     titlePage: 'box',
+    titlelikePlain: true,
     shadow: false,
     frametitleAlign: 'left',
     sidebar: { side: 'right', widthPct: 0.096, head: false },
