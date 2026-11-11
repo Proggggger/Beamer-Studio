@@ -2,12 +2,45 @@ import { COLOR_THEME_NAMES, THEME_SPECS } from '../themes/beamerThemes';
 import { wrapInColumns } from './blockOps';
 import { DEFAULT_META, DEFAULT_THEME } from './defaults';
 import { uid } from './ids';
-import type { Block, CustomColors, Deck, Item, Slide, ThemeSettings } from './types';
+import type {
+  Block,
+  BlockColorOverrides,
+  CustomColors,
+  Deck,
+  Item,
+  Slide,
+  ThemeSettings,
+} from './types';
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const str = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
+
+function normalizeHex(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const match = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(value.trim());
+  if (!match) return undefined;
+  const short = match[1].toLowerCase();
+  const full =
+    short.length === 3
+      ? short
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : short;
+  return `#${full}`;
+}
+
+function validBlockColors(value: unknown): BlockColorOverrides | undefined {
+  if (!isObject(value)) return undefined;
+  const colors: BlockColorOverrides = {};
+  for (const key of ['titleBg', 'titleFg', 'bodyBg', 'bodyFg'] as const) {
+    const color = normalizeHex(value[key]);
+    if (color) colors[key] = color;
+  }
+  return Object.keys(colors).length > 0 ? colors : undefined;
+}
 
 function validItem(value: unknown): Item | null {
   if (!isObject(value)) return null;
@@ -59,6 +92,7 @@ function validBlocks(value: unknown, depth = 0): Block[] {
               : 'normal',
           title: str(raw.title),
           body: validBlocks(raw.body, depth + 1),
+          colors: validBlockColors(raw.colors),
         });
         break;
       case 'columns':

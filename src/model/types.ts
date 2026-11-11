@@ -109,12 +109,23 @@ export interface ListBlock {
   items: Item[];
 }
 
+export type BlockTone = 'normal' | 'alert' | 'example';
+
+export interface BlockColorOverrides {
+  titleBg?: string;
+  titleFg?: string;
+  bodyBg?: string;
+  bodyFg?: string;
+}
+
 export interface BlockBlock {
   id: string;
   type: 'block';
-  tone: 'normal' | 'alert' | 'example';
+  tone: BlockTone;
   title: string;
   body: Block[];
+  /** Local overrides, exported inside a LaTeX group with the block. */
+  colors?: BlockColorOverrides;
 }
 
 export interface ColumnsBlock {

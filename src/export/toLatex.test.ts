@@ -195,6 +195,55 @@ describe('toLatex slides', () => {
     expect(tex).toContain('\\begin{block}{Plain}');
   });
 
+  it('wraps a block with color overrides in a local group', () => {
+    const body: Block[] = [
+      {
+        id: 'b1',
+        type: 'block',
+        tone: 'alert',
+        title: 'Careful',
+        colors: { titleBg: '#f00', titleFg: '#ffffff', bodyBg: '#ffeeee' },
+        body: [{ id: 'p1', type: 'paragraph', text: 'Text' }],
+      },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toContain('{%');
+    expect(tex).toContain('\\definecolor{bxBlockb1TitleBg}{HTML}{FF0000}');
+    expect(tex).toContain('\\definecolor{bxBlockb1TitleFg}{HTML}{FFFFFF}');
+    expect(tex).toContain('\\setbeamercolor{block title alerted}{bg=bxBlockb1TitleBg,fg=bxBlockb1TitleFg}');
+    expect(tex).toContain('\\definecolor{bxBlockb1BodyBg}{HTML}{FFEEEE}');
+    expect(tex).toContain('\\setbeamercolor{block body alerted}{bg=bxBlockb1BodyBg}');
+    expect(tex).not.toContain('BodyFg');
+    expect(tex).toContain('\\begin{alertblock}{Careful}');
+    expect(tex).toMatch(/\\begin\{alertblock\}\{Careful\}\s+Text\s+\\end\{alertblock\}\s+\}/);
+  });
+
+  it('keeps normal and example blocks ungrouped when they have no overrides', () => {
+    const body: Block[] = [
+      { id: 'b1', type: 'block', tone: 'normal', title: 'Plain', body: [] },
+      { id: 'b2', type: 'block', tone: 'example', title: 'Sample', body: [], colors: {} },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).not.toContain('{%');
+    expect(tex).not.toContain('\\definecolor{bxBlock');
+  });
+
+  it('uses the example color names for an example block with overrides', () => {
+    const body: Block[] = [
+      {
+        id: 'b2',
+        type: 'block',
+        tone: 'example',
+        title: 'Sample',
+        colors: { bodyFg: '#123456' },
+        body: [],
+      },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toContain('\\setbeamercolor{block body example}{fg=bxBlockb2BodyFg}');
+    expect(tex).not.toContain('block title example}{');
+  });
+
   it('wraps centered paragraphs in center so the export matches the preview', () => {
     const body: Block[] = [
       { id: 'p1', type: 'paragraph', text: 'Centered', align: 'center' },

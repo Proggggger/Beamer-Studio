@@ -1,5 +1,5 @@
 import { splitParagraphs } from '../model/paragraphs';
-import type { Block, Deck, ImageBlock, Item, Slide } from '../model/types';
+import type { Block, BlockColorOverrides, BlockTone, Deck, ImageBlock, Item, Slide } from '../model/types';
 import { themeSpec } from '../themes/beamerThemes';
 import { readableOn, shade } from '../themes/colorMath';
 import { resolveTheme } from '../themes/resolve';
@@ -11,6 +11,33 @@ function hexTriple(hex: string): string {
   if (!match) return '0,0,0';
   const value = match[1];
   return [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16)).join(',');
+}
+
+function htmlHex(hex: string): string {
+  const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return '000000';
+  const value = match[1];
+  return (value.length === 3 ? value.split('').map((char) => char + char).join('') : value).toUpperCase();
+}
+
+function blockColorTargets(tone: BlockTone): { title: string; body: string } {
+  if (tone === 'alert') return { title: 'block title alerted', body: 'block body alerted' };
+  if (tone === 'example') return { title: 'block title example', body: 'block body example' };
+  return { title: 'block title', body: 'block body' };
+}
+
+function blockColorSet(
+  colors: BlockColorOverrides,
+  part: 'title' | 'body',
+  target: string,
+  define: (suffix: string, value: string) => string,
+): string | null {
+  const bg = part === 'title' ? colors.titleBg : colors.bodyBg;
+  const fg = part === 'title' ? colors.titleFg : colors.bodyFg;
+  const spec: string[] = [];
+  if (bg) spec.push(`bg=${define(part === 'title' ? 'TitleBg' : 'BodyBg', bg)}`);
+  if (fg) spec.push(`fg=${define(part === 'title' ? 'TitleFg' : 'BodyFg', fg)}`);
+  return spec.length > 0 ? `\\setbeamercolor{${target}}{${spec.join(',')}}` : null;
 }
 
 function pad(level: number): string {
@@ -135,9 +162,33 @@ function renderBlocks(
       case 'block': {
         const env =
           block.tone === 'alert' ? 'alertblock' : block.tone === 'example' ? 'exampleblock' : 'block';
-        lines.push(`${pad(level)}\\begin{${env}}{${block.title}}`);
-        renderBlocks(block.body, lines, level + 1, imageNames);
-        lines.push(`${pad(level)}\\end{${env}}`);
+        const colors = block.colors;
+        const hasOverride = Boolean(
+          colors && (colors.titleBg || colors.titleFg || colors.bodyBg || colors.bodyFg),
+        );
+        if (!hasOverride) {
+          lines.push(`${pad(level)}\\begin{${env}}{${block.title}}`);
+          renderBlocks(block.body, lines, level + 1, imageNames);
+          lines.push(`${pad(level)}\\end{${env}}`);
+          lines.push('');
+          break;
+        }
+        const targets = blockColorTargets(block.tone);
+        const nameBase = `bxBlock${block.id.replace(/[^A-Za-z0-9]/g, '')}`;
+        const define = (suffix: string, value: string): string => {
+          const name = `${nameBase}${suffix}`;
+          lines.push(`${pad(level + 1)}\\definecolor{${name}}{HTML}{${htmlHex(value)}}`);
+          return name;
+        };
+        lines.push(`${pad(level)}{%`);
+        const titleSpec = blockColorSet(colors ?? {}, 'title', targets.title, define);
+        if (titleSpec) lines.push(`${pad(level + 1)}${titleSpec}`);
+        const bodySpec = blockColorSet(colors ?? {}, 'body', targets.body, define);
+        if (bodySpec) lines.push(`${pad(level + 1)}${bodySpec}`);
+        lines.push(`${pad(level + 1)}\\begin{${env}}{${block.title}}`);
+        renderBlocks(block.body, lines, level + 2, imageNames);
+        lines.push(`${pad(level + 1)}\\end{${env}}`);
+        lines.push(`${pad(level)}}`);
         lines.push('');
         break;
       }

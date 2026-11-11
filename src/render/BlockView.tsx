@@ -110,6 +110,10 @@ function ToneBlock({ block, context }: { block: Extract<Block, { type: 'block' }
   const shadow = context.theme.layout.blockShadow
     ? '0 0.12em 0.35em rgba(0,0,0,0.4)'
     : 'none';
+  const titleBackground = block.colors?.titleBg ?? titleBg;
+  const titleForeground = block.colors?.titleFg ?? titleFg;
+  const bodyBackground = block.colors?.bodyBg ?? bodyBg;
+  const bodyForeground = block.colors?.bodyFg ?? bodyFg;
 
   return (
     <div
@@ -122,7 +126,7 @@ function ToneBlock({ block, context }: { block: Extract<Block, { type: 'block' }
     >
       <div
         className="bx-theme-block-title"
-        style={{ background: titleBg, color: titleFg, borderRadius: `${radius} ${radius} 0 0` }}
+        style={{ background: titleBackground, color: titleForeground, borderRadius: `${radius} ${radius} 0 0` }}
       >
         <EditableText
           editable={context.editable}
@@ -139,7 +143,7 @@ function ToneBlock({ block, context }: { block: Extract<Block, { type: 'block' }
       </div>
       <div
         className="bx-theme-block-body"
-        style={{ background: bodyBg, color: bodyFg, borderRadius: `0 0 ${radius} ${radius}` }}
+        style={{ background: bodyBackground, color: bodyForeground, borderRadius: `0 0 ${radius} ${radius}` }}
       >
         <BlockList blocks={block.body} context={context} />
       </div>

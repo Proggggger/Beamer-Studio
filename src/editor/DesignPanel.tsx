@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useDeckStore } from '../model/store';
 import { COLOR_GALLERY_SLIDE, GALLERY_SLIDE } from '../model/defaults';
 import type { CustomColors } from '../model/types';
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
-import { TRANSPARENT, isHexColor } from '../themes/colorMath';
+import { TRANSPARENT } from '../themes/colorMath';
 import { resolveTheme } from '../themes/resolve';
 import { ScaledSlide } from '../render/SlideCanvas';
+import { ColorField } from './ColorField';
 
 const COLOR_KEYS: Array<{ key: keyof Omit<CustomColors, 'enabled'>; label: string }> = [
   { key: 'structure', label: 'Structure / accent' },
@@ -21,61 +22,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="field-label">{label}</span>
       {children}
     </label>
-  );
-}
-
-function ColorField({
-  label,
-  value,
-  fallback,
-  onChange,
-}: {
-  label: string;
-  value: string | undefined;
-  fallback: string;
-  onChange: (value: string | undefined) => void;
-}) {
-  const effective = value ?? fallback;
-  const [draft, setDraft] = useState(effective);
-
-  useEffect(() => {
-    setDraft(effective);
-  }, [effective]);
-
-  return (
-    <div className="color-field">
-      <span className="field-label">{label}</span>
-      <div className="color-field-controls">
-        <input
-          type="color"
-          value={isHexColor(draft) ? draft : fallback}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            onChange(event.target.value);
-          }}
-          aria-label={`${label} color`}
-        />
-        <input
-          className="hex-input"
-          value={draft}
-          spellCheck={false}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            if (isHexColor(event.target.value)) onChange(event.target.value);
-          }}
-          onBlur={() => setDraft(value ?? fallback)}
-        />
-        <button
-          type="button"
-          className="icon-btn"
-          title="Reset this color"
-          disabled={!value}
-          onClick={() => onChange(undefined)}
-        >
-          &#8635;
-        </button>
-      </div>
-    </div>
   );
 }
 

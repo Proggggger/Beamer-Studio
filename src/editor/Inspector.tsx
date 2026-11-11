@@ -1,7 +1,17 @@
-import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { blockLabel, findBlock } from '../model/blockOps';
 import { useDeckStore } from '../model/store';
-import type { Block, BlockType, Deck, DeckMeta } from '../model/types';
+import type {
+  Block,
+  BlockColorOverrides,
+  BlockTone,
+  BlockType,
+  Deck,
+  DeckMeta,
+} from '../model/types';
+import { isHexColor } from '../themes/colorMath';
+import { resolveTheme } from '../themes/resolve';
+import { ColorField } from './ColorField';
 import { readImageFile } from './imageFile';
 
 const BLOCK_TYPES: Array<{ type: BlockType; label: string }> = [
@@ -420,6 +430,149 @@ function ImageEditor({ block }: { block: Extract<Block, { type: 'image' }> }) {
   );
 }
 
+function BlockEditor({ block }: { block: Extract<Block, { type: 'block' }> }) {
+  const updateBlock = useDeckStore((state) => state.updateBlock);
+  const theme = useDeckStore((state) => state.deck.theme);
+  const aspect = useDeckStore((state) => state.deck.aspect);
+  const tone = TONES.find((entry) => entry.tone === block.tone) ?? TONES[0];
+
+  const defaults = useMemo(() => {
+    const { palette } = resolveTheme(theme, aspect);
+    const swatches =
+      block.tone === 'alert'
+        ? { title: palette.blockTitleAlert, body: palette.blockBodyAlert }
+        : block.tone === 'example'
+          ? { title: palette.blockTitleExample, body: palette.blockBodyExample }
+          : { title: palette.blockTitle, body: palette.blockBody };
+    const pick = (value: string | undefined, fallback: string) =>
+      isHexColor(value) ? value : fallback;
+    return {
+      titleBg: pick(swatches.title.bg, palette.bg),
+      titleFg: pick(swatches.title.fg, palette.fg),
+      bodyBg: pick(swatches.body.bg, palette.bg),
+      bodyFg: pick(swatches.body.fg, palette.fg),
+    };
+  }, [theme, aspect, block.tone]);
+
+  const setColor = (key: keyof BlockColorOverrides, value: string | undefined) =>
+    updateBlock(
+      block.id,
+      (target) => {
+        if (target.type !== 'block' || !target.colors) return target;
+        const colors: BlockColorOverrides = { ...target.colors };
+        if (value === undefined) delete colors[key];
+        else colors[key] = value;
+        return { ...target, colors };
+      },
+      `block-colors:${block.id}:${key}`,
+    );
+
+  return (
+    <>
+      <div className="segmented" role="group" aria-label="Block type">
+        {TONES.map((entry) => (
+          <button
+            key={entry.tone}
+            type="button"
+            className={block.tone === entry.tone ? 'is-active' : ''}
+            onClick={() =>
+              updateBlock(block.id, (target) =>
+                target.type === 'block' ? { ...target, tone: entry.tone } : target,
+              )
+            }
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+      <p className="muted small">
+        {tone.description} Exports as <code>{`\\begin{${tone.env}}`}</code>.
+      </p>
+      <Field label="Block title">
+        <input
+          value={block.title}
+          spellCheck={false}
+          onChange={(event) =>
+            updateBlock(
+              block.id,
+              (target) => (target.type === 'block' ? { ...target, title: event.target.value } : target),
+              `block-title:${block.id}`,
+            )
+          }
+        />
+      </Field>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={block.colors !== undefined}
+          onChange={(event) =>
+            updateBlock(block.id, (target) =>
+              target.type === 'block'
+                ? { ...target, colors: event.target.checked ? {} : undefined }
+                : target,
+            )
+          }
+        />
+        Override colors in a local group
+      </label>
+      {block.colors ? (
+        <>
+          <ColorField
+            label="Title background"
+            value={block.colors.titleBg}
+            fallback={defaults.titleBg}
+            onChange={(value) => setColor('titleBg', value)}
+          />
+          <ColorField
+            label="Title text"
+            value={block.colors.titleFg}
+            fallback={defaults.titleFg}
+            onChange={(value) => setColor('titleFg', value)}
+          />
+          <ColorField
+            label="Body background"
+            value={block.colors.bodyBg}
+            fallback={defaults.bodyBg}
+            onChange={(value) => setColor('bodyBg', value)}
+          />
+          <ColorField
+            label="Body text"
+            value={block.colors.bodyFg}
+            fallback={defaults.bodyFg}
+            onChange={(value) => setColor('bodyFg', value)}
+          />
+          <p className="muted small">
+            Only the changed colors are emitted, inside <code>{'{ ... }'}</code> with{' '}
+            <code>\setbeamercolor</code>.
+          </p>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+const TONES: Array<{ tone: BlockTone; label: string; env: string; description: string }> = [
+  {
+    tone: 'normal',
+    label: 'Block',
+    env: 'block',
+    description:
+      "Neutral, uses the theme's structure color — general content, definitions, or key points.",
+  },
+  {
+    tone: 'alert',
+    label: 'Alert',
+    env: 'alertblock',
+    description: 'Red or warning-style color — warnings, caveats, or important constraints.',
+  },
+  {
+    tone: 'example',
+    label: 'Example',
+    env: 'exampleblock',
+    description: 'Green or positive-style color — examples, illustrations, or worked cases.',
+  },
+];
+
 function SelectedBlockEditor({ block }: { block: Block }) {
   const updateBlock = useDeckStore((state) => state.updateBlock);
   return (
@@ -430,39 +583,7 @@ function SelectedBlockEditor({ block }: { block: Block }) {
       </h3>
       {block.type === 'paragraph' ? <ParagraphEditor block={block} /> : null}
       {block.type === 'list' ? <ListEditor block={block} /> : null}
-      {block.type === 'block' ? (
-        <>
-          <Field label="Tone">
-            <select
-              value={block.tone}
-              onChange={(event) =>
-                updateBlock(block.id, (target) =>
-                  target.type === 'block'
-                    ? { ...target, tone: event.target.value as 'normal' | 'alert' | 'example' }
-                    : target,
-                )
-              }
-            >
-              <option value="normal">Block</option>
-              <option value="alert">Alert block</option>
-              <option value="example">Example block</option>
-            </select>
-          </Field>
-          <Field label="Block title">
-            <input
-              value={block.title}
-              spellCheck={false}
-              onChange={(event) =>
-                updateBlock(
-                  block.id,
-                  (target) => (target.type === 'block' ? { ...target, title: event.target.value } : target),
-                  `block-title:${block.id}`,
-                )
-              }
-            />
-          </Field>
-        </>
-      ) : null}
+      {block.type === 'block' ? <BlockEditor block={block} /> : null}
       {block.type === 'columns' ? (
         <p className="muted small">
           Edit the contents of each column in the structure tree above, or add blocks to either side.

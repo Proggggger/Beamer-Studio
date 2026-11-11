@@ -9,6 +9,34 @@ function flatTwoColumnDeck(body: Block[]): Deck {
   return JSON.parse(JSON.stringify(deck)) as Deck;
 }
 
+describe('parseDeck block colors', () => {
+  function deckWithColors(colors: unknown): unknown {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{ body: unknown[] }>;
+    };
+    raw.slides[1].body = [
+      { id: 'b1', type: 'block', tone: 'alert', title: 'T', body: [], colors },
+    ];
+    return raw;
+  }
+
+  it('normalizes valid hex channels and drops invalid ones', () => {
+    const parsed = parseDeck(
+      deckWithColors({ titleBg: '#ABC', titleFg: 'nope', bodyFg: '#112233' }),
+    );
+    const block = parsed?.slides[1].body[0];
+    if (block?.type !== 'block') throw new Error('expected block');
+    expect(block.colors).toEqual({ titleBg: '#aabbcc', bodyFg: '#112233' });
+  });
+
+  it('omits the override object when no channel is valid', () => {
+    const parsed = parseDeck(deckWithColors({ titleBg: 'red', bodyFg: '#12345' }));
+    const block = parsed?.slides[1].body[0];
+    if (block?.type !== 'block') throw new Error('expected block');
+    expect(block.colors).toBeUndefined();
+  });
+});
+
 describe('parseDeck two-column migration', () => {
   it('moves a flat two-column body into a columns container split in half', () => {
     const parsed = parseDeck(
