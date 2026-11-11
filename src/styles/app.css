@@ -1407,22 +1407,6 @@ button:disabled {
   min-height: 0;
 }
 
-.bx-content.is-two-column {
-  flex-direction: row;
-  align-items: center;
-  /* beamer's columns environment splits 0.48 + 0.48 textwidth, leaving 4%. */
-  gap: 4%;
-}
-
-.bx-layout-column {
-  flex: 1;
-  min-width: 0;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  justify-content: safe center;
-}
-
 .bx-blocks {
   display: flex;
   flex-direction: column;

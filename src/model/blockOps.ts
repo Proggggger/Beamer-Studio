@@ -148,6 +148,27 @@ export function moveBlock(blocks: Block[], id: string, direction: -1 | 1): Block
   return changed ? next : blocks;
 }
 
+/** Two-column slide layouts are stored as one real columns container, so each
+    side owns its own block list instead of splitting a flat body in half. */
+export function wrapInColumns(blocks: Block[]): Block[] {
+  if (blocks.length === 1 && blocks[0].type === 'columns') return blocks;
+  const split = Math.ceil(blocks.length / 2);
+  return [
+    {
+      id: uid('block'),
+      type: 'columns',
+      left: blocks.slice(0, split),
+      right: blocks.slice(split),
+    },
+  ];
+}
+
+export function flattenColumns(blocks: Block[]): Block[] {
+  return blocks.length === 1 && blocks[0].type === 'columns'
+    ? [...blocks[0].left, ...blocks[0].right]
+    : blocks;
+}
+
 export function appendBlock(
   blocks: Block[],
   containerId: string | null,

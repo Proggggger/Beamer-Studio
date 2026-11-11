@@ -528,6 +528,7 @@ function SelectedBlockEditor({ block }: { block: Block }) {
 function SlideEditor({ deck }: { deck: Deck }) {
   const selectedSlideId = useDeckStore((state) => state.selectedSlideId);
   const updateSlide = useDeckStore((state) => state.updateSlide);
+  const setSlideLayout = useDeckStore((state) => state.setSlideLayout);
   const duplicateSlide = useDeckStore((state) => state.duplicateSlide);
   const deleteSlide = useDeckStore((state) => state.deleteSlide);
   const addBlock = useDeckStore((state) => state.addBlock);
@@ -588,11 +589,7 @@ function SlideEditor({ deck }: { deck: Deck }) {
               <select
                 value={slide.layout}
                 onChange={(event) =>
-                  updateSlide(
-                    slide.id,
-                    { layout: event.target.value as 'normal' | 'two-column' },
-                    `slide-layout:${slide.id}`,
-                  )
+                  setSlideLayout(slide.id, event.target.value as 'normal' | 'two-column')
                 }
               >
                 <option value="normal">Single column</option>

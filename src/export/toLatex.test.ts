@@ -245,13 +245,24 @@ describe('toLatex slides', () => {
     expect(tex).toContain('Right side');
   });
 
-  it('wraps slides switched to two-column layout in columns', () => {
+  it('exports several blocks on each side of a two-column frame', () => {
     const body: Block[] = [
-      { id: 'p1', type: 'paragraph', text: 'A' },
-      { id: 'p2', type: 'paragraph', text: 'B' },
+      {
+        id: 'cols',
+        type: 'columns',
+        left: [
+          { id: 'p1', type: 'paragraph', text: 'Left A' },
+          { id: 'p2', type: 'paragraph', text: 'Left B' },
+        ],
+        right: [{ id: 'p3', type: 'paragraph', text: 'Right A' }],
+      },
     ];
     const tex = toLatex(deck({ slides: [frame(body, { layout: 'two-column' })] }));
-    expect(tex).toContain('\\begin{columns}[T]');
+    expect(tex.match(/\\begin\{columns\}/g)).toHaveLength(1);
+    expect(tex.match(/\\begin\{column\}\{0\.48\\textwidth\}/g)).toHaveLength(2);
+    expect(tex).toContain('Left A');
+    expect(tex).toContain('Left B');
+    expect(tex).toContain('Right A');
   });
 
   it('renders math blocks and table of contents', () => {

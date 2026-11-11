@@ -5,11 +5,13 @@ import {
   cloneBlocks,
   createBlock,
   findBlock,
+  flattenColumns,
   moveBlock,
   moveItem,
   removeBlock,
   updateBlock,
   updateList,
+  wrapInColumns,
 } from './blockOps';
 import { createBlankSlide, createEmptyDeck, createSampleDeck } from './defaults';
 import { uid } from './ids';
@@ -25,6 +27,7 @@ import type {
   Item,
   Slide,
   SlideKind,
+  SlideLayout,
   ThemeName,
   ThemeSettings,
 } from './types';
@@ -68,6 +71,7 @@ interface DeckStore {
   deleteSlide: (id: string) => void;
   moveSlide: (id: string, direction: -1 | 1) => void;
   updateSlide: (id: string, patch: Partial<Omit<Slide, 'id' | 'body'>>, key?: string) => void;
+  setSlideLayout: (id: string, layout: SlideLayout) => void;
 
   addBlock: (type: BlockType, containerId?: string | null, side?: 'left' | 'right') => string;
   removeBlock: (id: string) => void;
@@ -263,6 +267,19 @@ export const useDeckStore = create<DeckStore>((set, get) => {
         }),
         key,
       ),
+
+    setSlideLayout: (id, layout) =>
+      commit((deck) => ({
+        ...deck,
+        slides: deck.slides.map((slide) => {
+          if (slide.id !== id || slide.layout === layout || slide.kind !== 'frame') return slide;
+          return {
+            ...slide,
+            layout,
+            body: layout === 'two-column' ? wrapInColumns(slide.body) : flattenColumns(slide.body),
+          };
+        }),
+      })),
 
     addBlock: (type, containerId = null, side = 'left') => {
       const state = get();

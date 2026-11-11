@@ -92,6 +92,45 @@ describe('slide actions', () => {
     expect(slide.subtitle).toBe('Sub');
     expect(slide.body).toBe(store.deck.slides[1].body);
   });
+
+  it('wraps the body in a columns container when switching to two columns', () => {
+    const store = useDeckStore.getState();
+    const id = store.deck.slides[1].id;
+    store.setSlideLayout(id, 'two-column');
+    const slide = useDeckStore.getState().deck.slides[1];
+    expect(slide.layout).toBe('two-column');
+    expect(slide.body).toHaveLength(1);
+    const columns = slide.body[0];
+    expect(columns.type).toBe('columns');
+    if (columns.type !== 'columns') throw new Error('expected columns');
+    expect(columns.left).toHaveLength(1);
+    expect(columns.right).toHaveLength(0);
+  });
+
+  it('adds blocks independently to each column', () => {
+    const store = useDeckStore.getState();
+    const id = store.deck.slides[1].id;
+    store.setSlideLayout(id, 'two-column');
+    const columnsId = useDeckStore.getState().deck.slides[1].body[0].id;
+    useDeckStore.getState().addBlock('paragraph', columnsId, 'left');
+    useDeckStore.getState().addBlock('paragraph', columnsId, 'right');
+    const body = useDeckStore.getState().deck.slides[1].body;
+    const columns = body[0];
+    if (columns.type !== 'columns') throw new Error('expected columns');
+    expect(columns.left).toHaveLength(2);
+    expect(columns.right).toHaveLength(1);
+  });
+
+  it('flattens the columns container when switching back to one column', () => {
+    const store = useDeckStore.getState();
+    const id = store.deck.slides[1].id;
+    store.setSlideLayout(id, 'two-column');
+    useDeckStore.getState().setSlideLayout(id, 'normal');
+    const slide = useDeckStore.getState().deck.slides[1];
+    expect(slide.layout).toBe('normal');
+    expect(slide.body).toHaveLength(1);
+    expect(slide.body[0].type).toBe('list');
+  });
 });
 
 describe('theme actions', () => {

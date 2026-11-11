@@ -1,4 +1,5 @@
 import { COLOR_THEME_NAMES, THEME_SPECS } from '../themes/beamerThemes';
+import { wrapInColumns } from './blockOps';
 import { DEFAULT_META, DEFAULT_THEME } from './defaults';
 import { uid } from './ids';
 import type { Block, CustomColors, Deck, Item, Slide, ThemeSettings } from './types';
@@ -105,13 +106,16 @@ function validSlides(value: unknown): Slide[] {
   for (const raw of value) {
     if (!isObject(raw)) continue;
     const kind = raw.kind === 'title' || raw.kind === 'section' ? raw.kind : 'frame';
+    const layout = raw.layout === 'two-column' ? 'two-column' : 'normal';
+    const body = kind === 'frame' ? validBlocks(raw.body) : [];
     slides.push({
       id: str(raw.id) || uid('slide'),
       kind,
       title: str(raw.title),
       subtitle: str(raw.subtitle),
-      layout: raw.layout === 'two-column' ? 'two-column' : 'normal',
-      body: kind === 'frame' ? validBlocks(raw.body) : [],
+      layout,
+      // Older decks stored two-column layouts as a flat body split in half.
+      body: kind === 'frame' && layout === 'two-column' ? wrapInColumns(body) : body,
     });
   }
   return slides;

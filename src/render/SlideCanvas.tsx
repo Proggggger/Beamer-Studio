@@ -114,11 +114,7 @@ function FramePage({
     : 'transparent';
   const titlePadding = geometry.titlePadding;
   const titleColor = palette.frametitle.fg;
-  const twoColumn = slide.layout === 'two-column';
   const subtitleDelta = slide.subtitle ? theme.page.h * 0.045 : 0;
-  const split = twoColumn ? Math.ceil(slide.body.length / 2) : slide.body.length;
-  const left = slide.body.slice(0, split);
-  const right = slide.body.slice(split);
   const context = {
     deck,
     theme,
@@ -178,7 +174,7 @@ function FramePage({
         </div>
       </div>
       <div
-        className={`bx-content${twoColumn ? ' is-two-column' : ''}`}
+        className="bx-content"
         style={{
           top: geometry.contentTop + subtitleDelta,
           left: geometry.contentLeft,
@@ -192,15 +188,6 @@ function FramePage({
               This frame is empty. Add a block from the inspector on the right.
             </div>
           ) : null
-        ) : twoColumn ? (
-          <>
-            <div className="bx-layout-column">
-              <BlockList blocks={left} context={context} />
-            </div>
-            <div className="bx-layout-column">
-              <BlockList blocks={right} context={context} />
-            </div>
-          </>
         ) : (
           <BlockList blocks={slide.body} context={context} />
         )}

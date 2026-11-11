@@ -226,19 +226,7 @@ function renderSlide(
         ? `{${slide.title}}`
         : '';
   lines.push(`\\begin{frame}${options}${title}`);
-  if (slide.layout === 'two-column' && slide.body.length > 0) {
-    const split = Math.ceil(slide.body.length / 2);
-    lines.push(`${pad(1)}\\begin{columns}[T]`);
-    lines.push(`${pad(2)}\\begin{column}{0.48\\textwidth}`);
-    renderBlocks(slide.body.slice(0, split), lines, 3, imageNames);
-    lines.push(`${pad(2)}\\end{column}`);
-    lines.push(`${pad(2)}\\begin{column}{0.48\\textwidth}`);
-    renderBlocks(slide.body.slice(split), lines, 3, imageNames);
-    lines.push(`${pad(2)}\\end{column}`);
-    lines.push(`${pad(1)}\\end{columns}`);
-  } else {
-    renderBlocks(slide.body, lines, 1, imageNames);
-  }
+  renderBlocks(slide.body, lines, 1, imageNames);
   lines.push('\\end{frame}');
   lines.push('');
 }
