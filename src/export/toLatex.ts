@@ -1,6 +1,16 @@
 import { splitParagraphs } from '../model/paragraphs';
-import type { Block, BlockColorOverrides, BlockTone, Deck, ImageBlock, Item, Slide } from '../model/types';
+import type {
+  BackgroundImageSettings,
+  BackgroundPosition,
+  Block,
+  BlockColorOverrides,
+  BlockTone,
+  Deck,
+  Item,
+  Slide,
+} from '../model/types';
 import { themeSpec } from '../themes/beamerThemes';
+import { resolveSlideBackground } from '../themes/backgrounds';
 import { readableOn, shade } from '../themes/colorMath';
 import { resolveFont, scriptFallbackChain } from '../themes/fonts';
 import { languageOption, languageScripts } from '../themes/languages';
@@ -143,27 +153,93 @@ function wrapScriptRuns(text: string, wrap: ScriptWrap, pdfSafe = false): string
   return result;
 }
 
+const BACKGROUND_ANCHORS: Record<BackgroundPosition, { fx: number; fy: number; node: string }> = {
+  center: { fx: 0.5, fy: 0.5, node: 'center' },
+  top: { fx: 0.5, fy: 1, node: 'north' },
+  bottom: { fx: 0.5, fy: 0, node: 'south' },
+  left: { fx: 0, fy: 0.5, node: 'west' },
+  right: { fx: 1, fy: 0.5, node: 'east' },
+  'top-left': { fx: 0, fy: 1, node: 'north west' },
+  'top-right': { fx: 1, fy: 1, node: 'north east' },
+  'bottom-left': { fx: 0, fy: 0, node: 'south west' },
+  'bottom-right': { fx: 1, fy: 0, node: 'south east' },
+};
+
+/** Beamer's fixed paper sizes in millimetres, matching aspectratio=169 vs default. */
+function paperMillimetres(aspect: Deck['aspect']): { w: number; h: number } {
+  return aspect === '169' ? { w: 160, h: 90 } : { w: 128, h: 96 };
+}
+
+function mm(value: number): string {
+  return `${value.toFixed(2)}mm`;
+}
+
+/**
+ * Replaces beamer's canvas with a solid fill and the positioned image on top.
+ * Uses explicit page coordinates instead of tikz's current page, which would
+ * need two LaTeX runs to resolve.
+ */
+function backgroundCanvasCommands(
+  image: BackgroundImageSettings,
+  name: string,
+  paper: { w: number; h: number },
+): string[] {
+  const anchor = BACKGROUND_ANCHORS[image.position];
+  const size =
+    image.mode === 'stretch'
+      ? 'width=\\paperwidth,height=\\paperheight'
+      : image.mode === 'fit'
+        ? 'width=\\paperwidth,height=\\paperheight,keepaspectratio'
+        : `width=${mm(((paper.w * image.scale) / 100))}`;
+  const pageBox = `(0,0) rectangle (${mm(paper.w)},${mm(paper.h)})`;
+  return [
+    '\\usebackgroundtemplate{%',
+    '  \\begin{tikzpicture}',
+    `    \\useasboundingbox ${pageBox};`,
+    `    \\fill[bxBackgroundFill] ${pageBox};`,
+    `    \\node[anchor=${anchor.node},inner sep=0pt,opacity=${(image.opacity / 100).toFixed(2)}] at (${mm(anchor.fx * paper.w)},${mm(anchor.fy * paper.h)}) {\\includegraphics[${size}]{${name}}};`,
+    '  \\end{tikzpicture}%',
+    '}',
+  ];
+}
+
+function backgroundFillCommands(paper: { w: number; h: number }): string[] {
+  const pageBox = `(0,0) rectangle (${mm(paper.w)},${mm(paper.h)})`;
+  return [
+    '\\usebackgroundtemplate{%',
+    '  \\begin{tikzpicture}',
+    `    \\useasboundingbox ${pageBox};`,
+    `    \\fill[bxBackgroundFill] ${pageBox};`,
+    '  \\end{tikzpicture}%',
+    '}',
+  ];
+}
+
 export interface LatexImage {
+  /** 'block:<id>' for image blocks, 'bg:<slot>' for slide backgrounds. */
+  key: string;
   name: string;
   dataUrl: string;
-  block: ImageBlock;
 }
 
 export function collectImages(deck: Deck): LatexImage[] {
   const images: LatexImage[] = [];
   const used = new Map<string, number>();
+  const add = (key: string, name: string, dataUrl: string) => {
+    let unique = latexImageName(name, images.length + 1);
+    const count = (used.get(unique) ?? 0) + 1;
+    used.set(unique, count);
+    if (count > 1) {
+      const dot = unique.lastIndexOf('.');
+      unique = `${unique.slice(0, dot)}-${count}${unique.slice(dot)}`;
+    }
+    images.push({ key, name: unique, dataUrl });
+  };
   const visit = (blocks: Block[]) => {
     for (const block of blocks) {
       if (block.type === 'image') {
         if (!block.src) continue;
-        let name = latexImageName(block.name, images.length + 1);
-        const count = (used.get(name) ?? 0) + 1;
-        used.set(name, count);
-        if (count > 1) {
-          const dot = name.lastIndexOf('.');
-          name = `${name.slice(0, dot)}-${count}${name.slice(dot)}`;
-        }
-        images.push({ name, dataUrl: block.src, block });
+        add(`block:${block.id}`, block.name, block.src);
       } else if (block.type === 'block') {
         visit(block.body);
       } else if (block.type === 'columns') {
@@ -173,6 +249,11 @@ export function collectImages(deck: Deck): LatexImage[] {
     }
   };
   for (const slide of deck.slides) visit(slide.body);
+  const backgrounds = deck.theme.backgrounds;
+  for (const slot of ['all', 'title', 'section'] as const) {
+    const background = backgrounds[slot];
+    if (background?.src) add(`bg:${slot}`, background.name || 'background', background.src);
+  }
   return images;
 }
 
@@ -289,7 +370,8 @@ function renderBlocks(
         lines.push('');
         break;
       case 'image': {
-        const name = imageNames.get(block.id) ?? latexImageName(block.name);
+        const name =
+          imageNames.get(`block:${block.id}`) ?? latexImageName(block.name);
         if (!block.src) {
           lines.push(`${pad(level)}% Image "${block.name}" has no attached file.`);
           break;
@@ -387,6 +469,10 @@ export function toLatex(deck: Deck): string {
   const { theme, document: settings } = deck;
   const spec = themeSpec(theme.template);
   const lines: string[] = [];
+  const resolved = resolveTheme(theme, deck.aspect, settings.fontSize);
+  const hasBackgrounds = Boolean(
+    theme.backgrounds.all || theme.backgrounds.title || theme.backgrounds.section,
+  );
 
   lines.push('% !TeX program = xelatex');
   if (deck.aspect === '169') {
@@ -398,7 +484,7 @@ export function toLatex(deck: Deck): string {
   if (!spec.colorThemes.includes(theme.colorTheme)) {
     if (theme.colorTheme === 'structure') {
       // Beamer's structure colortheme has no default color; it needs an RGB option.
-      lines.push(`\\usecolortheme[RGB={${hexTriple(resolveTheme(theme, deck.aspect).palette.structure)}}]{structure}`);
+      lines.push(`\\usecolortheme[RGB={${hexTriple(resolved.palette.structure)}}]{structure}`);
     } else {
       lines.push(`\\usecolortheme{${theme.colorTheme}}`);
     }
@@ -410,6 +496,7 @@ export function toLatex(deck: Deck): string {
 
   lines.push('\\usepackage{fontspec}');
   lines.push('\\usepackage{polyglossia}');
+  if (hasBackgrounds) lines.push('\\usepackage{tikz}');
   lines.push(`\\setmainlanguage{${languageOption(settings.mainLanguage).tex}}`);
   for (const id of settings.otherLanguages) {
     lines.push(`\\setotherlanguage{${languageOption(id).tex}}`);
@@ -506,6 +593,12 @@ export function toLatex(deck: Deck): string {
     }
   }
 
+  if (hasBackgrounds) {
+    lines.push(
+      `\\definecolor{bxBackgroundFill}{HTML}{${resolved.palette.bg.replace('#', '').toUpperCase()}}`,
+    );
+  }
+
   if (theme.bulletShape !== 'theme') {
     const bullets = BULLET_TEMPLATES[theme.bulletShape];
     lines.push(`\\setbeamertemplate{itemize item}{${bullets.item}}`);
@@ -543,8 +636,26 @@ export function toLatex(deck: Deck): string {
   lines.push('');
 
   const images = collectImages(deck);
-  const imageNames = new Map(images.map((image) => [image.block.id, image.name]));
-  for (const slide of deck.slides) renderSlide(slide, lines, imageNames, wrapText, wrapTitle);
+  const imageNames = new Map(images.map((image) => [image.key, image.name]));
+  const paper = paperMillimetres(deck.aspect);
+  let appliedBackground = 'none';
+  for (const slide of deck.slides) {
+    if (hasBackgrounds) {
+      const background = resolveSlideBackground(theme.backgrounds, slide.kind);
+      const backgroundName = background ? imageNames.get(`bg:${background.slot}`) : undefined;
+      const key = backgroundName ? `bg:${background?.slot}` : 'fill';
+      if (key !== appliedBackground) {
+        lines.push(
+          ...(background && backgroundName
+            ? backgroundCanvasCommands(background.image, backgroundName, paper)
+            : backgroundFillCommands(paper)),
+        );
+        lines.push('');
+        appliedBackground = key;
+      }
+    }
+    renderSlide(slide, lines, imageNames, wrapText, wrapTitle);
+  }
 
   lines.push('\\end{document}');
   lines.push('');

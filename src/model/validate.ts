@@ -1,10 +1,12 @@
 import { COLOR_THEME_NAMES, THEME_SPECS } from '../themes/beamerThemes';
+import { BACKGROUND_POSITIONS } from '../themes/backgrounds';
 import { CUSTOM_FONT_ID, FONT_IDS, FONT_SIZES, sanitizeFontName } from '../themes/fonts';
 import { LANGUAGE_IDS } from '../themes/languages';
 import { wrapInColumns } from './blockOps';
 import { DEFAULT_DOCUMENT, DEFAULT_META, DEFAULT_THEME } from './defaults';
 import { uid } from './ids';
 import type {
+  BackgroundImageSettings,
   Block,
   BlockColorOverrides,
   CustomColors,
@@ -14,6 +16,7 @@ import type {
   Item,
   LanguageId,
   Slide,
+  SlideBackgrounds,
   ThemeSettings,
 } from './types';
 
@@ -172,6 +175,38 @@ function validCustom(value: unknown): CustomColors {
   return custom;
 }
 
+function validBackground(value: unknown): BackgroundImageSettings | null {
+  if (!isObject(value)) return null;
+  const src = str(value.src);
+  if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(src)) return null;
+  const name = str(value.name, 'background').replace(/[\u0000-\u001f\\{}]/g, '').trim().slice(0, 120);
+  const opacity =
+    typeof value.opacity === 'number' && Number.isFinite(value.opacity)
+      ? Math.round(Math.max(0, Math.min(100, value.opacity)))
+      : 100;
+  const scale =
+    typeof value.scale === 'number' && Number.isFinite(value.scale)
+      ? Math.round(Math.max(5, Math.min(200, value.scale)))
+      : 100;
+  const mode =
+    value.mode === 'fit' || value.mode === 'stretch' || value.mode === 'scale'
+      ? value.mode
+      : 'scale';
+  const position = BACKGROUND_POSITIONS.some((entry) => entry.id === value.position)
+    ? (value.position as BackgroundImageSettings['position'])
+    : 'center';
+  return { src, name: name || 'background', opacity, mode, scale, position };
+}
+
+function validBackgrounds(value: unknown): SlideBackgrounds {
+  const raw = isObject(value) ? value : {};
+  return {
+    all: validBackground(raw.all),
+    title: validBackground(raw.title),
+    section: validBackground(raw.section),
+  };
+}
+
 /** Decks saved before XeLaTeX support stored the family as 'sans' | 'serif'. */
 const LEGACY_FONTS: Record<string, FontId> = {
   sans: 'latin-modern-sans',
@@ -231,6 +266,7 @@ function validTheme(value: unknown): ThemeSettings {
     custom: validCustom(raw.custom),
     fontFamily: validFontId(raw.fontFamily),
     customFont: sanitizeFontName(raw.customFont),
+    backgrounds: validBackgrounds(raw.backgrounds),
     fontScale:
       typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)
         ? Math.max(0.8, Math.min(1.3, raw.fontScale))

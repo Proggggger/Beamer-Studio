@@ -2,6 +2,11 @@ import type { CSSProperties } from 'react';
 import { useDeckStore } from '../model/store';
 import type { Deck, Slide } from '../model/types';
 import type { ResolvedTheme } from '../themes/resolve';
+import {
+  backgroundPositionCss,
+  backgroundSizeCss,
+  resolveSlideBackground,
+} from '../themes/backgrounds';
 import { mix, TRANSPARENT } from '../themes/colorMath';
 import { BlockList } from './BlockView';
 import { EditableText } from './EditableText';
@@ -211,13 +216,27 @@ export function SlideCanvas({
   selectedBlockId = null,
   selectedItemId = null,
 }: SlideCanvasProps) {
+  const background = resolveSlideBackground(deck.theme.backgrounds, slide.kind);
   return (
     <div
-      className={`bx-page bx-kind-${slide.kind}`}
+      className={`bx-page bx-kind-${slide.kind}${background ? ' has-background' : ''}`}
       style={theme.cssVars as CSSProperties}
       data-slide-id={slide.id}
       data-template={theme.spec.name}
     >
+      {background ? (
+        <div
+          className="bx-slide-bg"
+          aria-hidden
+          style={{
+            backgroundImage: `url("${background.image.src}")`,
+            backgroundSize: backgroundSizeCss(background.image),
+            backgroundPosition: backgroundPositionCss(background.image.position),
+            backgroundRepeat: 'no-repeat',
+            opacity: background.image.opacity / 100,
+          }}
+        />
+      ) : null}
       {slide.kind === 'title' ? (
         <TitlePage deck={deck} theme={theme} editable={editable} />
       ) : slide.kind === 'section' ? (

@@ -1,14 +1,28 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useDeckStore } from '../model/store';
 import { COLOR_GALLERY_SLIDE, GALLERY_SLIDE } from '../model/defaults';
-import type { CustomColors, FontId, FontSizePt, LanguageId } from '../model/types';
+import type {
+  BackgroundImageSettings,
+  CustomColors,
+  FontId,
+  FontSizePt,
+  LanguageId,
+  SlideBackgrounds,
+} from '../model/types';
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
+import {
+  BACKGROUND_MODES,
+  BACKGROUND_POSITIONS,
+  EMPTY_BACKGROUNDS,
+  newBackground,
+} from '../themes/backgrounds';
 import { TRANSPARENT } from '../themes/colorMath';
 import { FONT_OPTIONS, FONT_SIZES, CUSTOM_FONT_ID, resolveFont } from '../themes/fonts';
 import { LANGUAGE_OPTIONS, languageOption, languageScripts } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
 import { ScaledSlide } from '../render/SlideCanvas';
 import { ColorField } from './ColorField';
+import { readImageFile } from './imageFile';
 
 const COLOR_KEYS: Array<{ key: keyof Omit<CustomColors, 'enabled'>; label: string }> = [
   { key: 'structure', label: 'Structure / accent' },
@@ -65,7 +79,7 @@ function TemplateGallery() {
             title={`${name} · ${spec.outer} outer · ${spec.inner} inner`}
           >
             <ScaledSlide
-              deck={{ version: 1, meta: { title: 'Title', subtitle: 'Subtitle', author: '', institute: '', date: '' }, aspect, theme: { ...theme, template: name, custom: { enabled: false } }, document, slides: [GALLERY_SLIDE] }}
+              deck={{ version: 1, meta: { title: 'Title', subtitle: 'Subtitle', author: '', institute: '', date: '' }, aspect, theme: { ...theme, template: name, custom: { enabled: false }, backgrounds: { ...EMPTY_BACKGROUNDS } }, document, slides: [GALLERY_SLIDE] }}
               slide={GALLERY_SLIDE}
               slideIndex={0}
               theme={resolved}
@@ -94,7 +108,12 @@ function ColorGallery() {
   const previews = useMemo(
     () =>
       COLOR_THEME_NAMES.map((name) => {
-        const previewTheme = { ...theme, colorTheme: name, custom: { enabled: false } };
+        const previewTheme = {
+          ...theme,
+          colorTheme: name,
+          custom: { enabled: false },
+          backgrounds: { ...EMPTY_BACKGROUNDS },
+        };
         return {
           name,
           deck: { ...deck, theme: previewTheme },
@@ -431,6 +450,196 @@ function LayoutSettings() {
   );
 }
 
+const BACKGROUND_SLOTS: Array<{
+  slot: keyof SlideBackgrounds;
+  title: string;
+  hint: string;
+}> = [
+  {
+    slot: 'all',
+    title: 'All frames',
+    hint: 'Drawn behind every slide unless the title or section page overrides it.',
+  },
+  {
+    slot: 'title',
+    title: 'Title page',
+    hint: 'Adds a dedicated image for the title page, or reuse the shared one.',
+  },
+  {
+    slot: 'section',
+    title: 'Section pages',
+    hint: 'Adds a dedicated image for section pages, or reuse the shared one.',
+  },
+];
+
+function BackgroundCard({
+  slot,
+  title,
+  hint,
+  value,
+  inherited,
+  onChange,
+}: {
+  slot: keyof SlideBackgrounds;
+  title: string;
+  hint: string;
+  value: BackgroundImageSettings | null;
+  inherited: boolean;
+  onChange: (value: BackgroundImageSettings | null) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const result = await readImageFile(file);
+      onChange({
+        ...(value ?? newBackground(result.src, result.name)),
+        src: result.src,
+        name: result.name,
+      });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not read that image.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const update = (patch: Partial<BackgroundImageSettings>) => {
+    if (value) onChange({ ...value, ...patch });
+  };
+
+  return (
+    <section className="panel-section bg-card">
+      <h3>{title}</h3>
+      <p className="panel-hint">{hint}</p>
+      {value ? (
+        <>
+          <div className="bg-thumb">
+            <img src={value.src} alt={value.name} />
+          </div>
+          <p className="bg-name" title={value.name}>
+            {value.name}
+          </p>
+          <div className="bg-row">
+            <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
+              {busy ? 'Reading…' : 'Replace image'}
+            </button>
+            <button type="button" className="btn btn-tiny" onClick={() => onChange(null)}>
+              {slot === 'all' ? 'Remove' : 'Use shared image'}
+            </button>
+          </div>
+          <Field label={`Opacity · ${value.opacity}%`}>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={value.opacity}
+              onChange={(event) => update({ opacity: Number(event.target.value) })}
+            />
+          </Field>
+          <Field label="Size">
+            <select
+              value={value.mode}
+              onChange={(event) =>
+                update({ mode: event.target.value as BackgroundImageSettings['mode'] })
+              }
+            >
+              {BACKGROUND_MODES.map((mode) => (
+                <option key={mode.id} value={mode.id}>
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {value.mode === 'scale' ? (
+            <Field label={`Image width · ${value.scale}%`}>
+              <input
+                type="range"
+                min={10}
+                max={200}
+                step={5}
+                value={value.scale}
+                onChange={(event) => update({ scale: Number(event.target.value) })}
+              />
+            </Field>
+          ) : null}
+          <Field label="Position">
+            <select
+              value={value.position}
+              onChange={(event) =>
+                update({ position: event.target.value as BackgroundImageSettings['position'] })
+              }
+            >
+              {BACKGROUND_POSITIONS.map((position) => (
+                <option key={position.id} value={position.id}>
+                  {position.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </>
+      ) : (
+        <>
+          <p className="panel-hint">
+            {inherited ? 'No override — using the shared background.' : 'No background image.'}
+          </p>
+          <div className="bg-row">
+            <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
+              {busy ? 'Reading…' : 'Choose image'}
+            </button>
+          </div>
+        </>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          void pick(file);
+        }}
+      />
+    </section>
+  );
+}
+
+function BackgroundsPanel() {
+  const theme = useDeckStore((state) => state.deck.theme);
+  const updateTheme = useDeckStore((state) => state.updateTheme);
+  const backgrounds = theme.backgrounds;
+
+  return (
+    <>
+      <p className="panel-hint bg-intro">
+        Backgrounds sit behind the slide content in the preview and the XeLaTeX export. Title and
+        section pages can use their own image instead of the shared one.
+      </p>
+      {BACKGROUND_SLOTS.map(({ slot, title, hint }) => (
+        <BackgroundCard
+          key={slot}
+          slot={slot}
+          title={title}
+          hint={hint}
+          value={backgrounds[slot]}
+          inherited={slot !== 'all' && backgrounds[slot] === null && backgrounds.all !== null}
+          onChange={(value) =>
+            updateTheme(
+              { backgrounds: { ...backgrounds, [slot]: value } },
+              `background:${slot}`,
+            )
+          }
+        />
+      ))}
+    </>
+  );
+}
+
 export function DesignPanel() {
   const designTab = useDeckStore((state) => state.designTab);
   const setDesignTab = useDeckStore((state) => state.setDesignTab);
@@ -458,10 +667,18 @@ export function DesignPanel() {
         >
           Layout
         </button>
+        <button
+          type="button"
+          className={designTab === 'background' ? 'is-active' : ''}
+          onClick={() => setDesignTab('background')}
+        >
+          Background
+        </button>
       </div>
       {designTab === 'template' ? <TemplateGallery /> : null}
       {designTab === 'colors' ? <ColorGallery /> : null}
       {designTab === 'layout' ? <LayoutSettings /> : null}
+      {designTab === 'background' ? <BackgroundsPanel /> : null}
     </div>
   );
 }

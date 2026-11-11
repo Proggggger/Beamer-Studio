@@ -102,7 +102,7 @@ export function ExportDialog() {
             </p>
             <div className="export-image-list">
               {images.map((image) => (
-                <div className="export-image-row" key={`${image.block.id}-${image.name}`}>
+                <div className="export-image-row" key={image.key}>
                   <img src={image.dataUrl} alt={image.name} />
                   <span className="export-image-name">{image.name}</span>
                   <button

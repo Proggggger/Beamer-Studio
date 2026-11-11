@@ -134,6 +134,38 @@ export interface DocumentSettings {
   scriptFont: FontId | 'auto';
 }
 
+export type BackgroundPosition =
+  | 'center'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
+
+export type BackgroundSizeMode = 'scale' | 'fit' | 'stretch';
+
+export interface BackgroundImageSettings {
+  /** Data URL of the uploaded image. */
+  src: string;
+  name: string;
+  /** 0–100, where 100 is fully opaque. */
+  opacity: number;
+  mode: BackgroundSizeMode;
+  /** Width as a percentage of the page when mode is 'scale'. */
+  scale: number;
+  position: BackgroundPosition;
+}
+
+/** null inherits the shared image on title/section pages; on 'all' it means no image. */
+export interface SlideBackgrounds {
+  all: BackgroundImageSettings | null;
+  title: BackgroundImageSettings | null;
+  section: BackgroundImageSettings | null;
+}
+
 export interface CustomColors {
   enabled: boolean;
   structure?: string;
@@ -150,6 +182,8 @@ export interface ThemeSettings {
   fontFamily: FontId;
   /** family name typed by the user when fontFamily is 'custom' */
   customFont: string;
+  /** Background images drawn behind every slide, with optional title/section overrides. */
+  backgrounds: SlideBackgrounds;
   fontScale: number;
   bulletShape: 'theme' | BulletShape;
   blockShape: 'theme' | BlockShape;

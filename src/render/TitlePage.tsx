@@ -47,7 +47,7 @@ export function TitlePage({ deck, theme, editable }: TitlePageProps) {
   return (
     <div
       className={`bx-title-page${boxed ? ' is-boxed' : ''}${inmargin ? ' is-inmargin' : ''}`}
-      style={{ background: palette.bg, color: palette.fg }}
+      style={{ color: palette.fg }}
     >
       <div className="bx-title-page-inner">
         <div className="bx-title-stack" style={boxStyle}>

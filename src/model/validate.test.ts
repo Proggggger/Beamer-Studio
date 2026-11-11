@@ -110,6 +110,75 @@ describe('parseDeck document settings', () => {
   });
 });
 
+describe('parseDeck backgrounds', () => {
+  function withBackgrounds(backgrounds: unknown): unknown {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as Record<string, unknown>;
+    raw.theme = { ...(raw.theme as object), backgrounds };
+    return raw;
+  }
+
+  const src = 'data:image/png;base64,AAAA';
+
+  it('fills empty slots for decks saved before backgrounds existed', () => {
+    expect(parseDeck(createEmptyDeck())?.theme.backgrounds).toEqual({
+      all: null,
+      title: null,
+      section: null,
+    });
+  });
+
+  it('normalizes opacity, scale, mode and position', () => {
+    const parsed = parseDeck(
+      withBackgrounds({
+        all: {
+          src,
+          name: ' hero.png ',
+          opacity: 240,
+          scale: 2,
+          mode: 'stretch',
+          position: 'bottom-right',
+        },
+      }),
+    );
+    expect(parsed?.theme.backgrounds.all).toEqual({
+      src,
+      name: 'hero.png',
+      opacity: 100,
+      scale: 5,
+      mode: 'stretch',
+      position: 'bottom-right',
+    });
+    expect(parsed?.theme.backgrounds.title).toBeNull();
+  });
+
+  it('falls back to defaults for unknown enums and scrubs the name', () => {
+    const parsed = parseDeck(
+      withBackgrounds({
+        section: { src, name: 'bad\\name{}', opacity: -4, mode: 'zoom', position: 'middle' },
+      }),
+    );
+    expect(parsed?.theme.backgrounds.section).toEqual({
+      src,
+      name: 'badname',
+      opacity: 0,
+      scale: 100,
+      mode: 'scale',
+      position: 'center',
+    });
+  });
+
+  it('drops slots without an embedded image', () => {
+    const parsed = parseDeck(
+      withBackgrounds({
+        all: { src: 'https://example.com/bg.png', name: 'remote' },
+        title: { src: '', name: 'empty' },
+      }),
+    );
+    expect(parsed?.theme.backgrounds.all).toBeNull();
+    expect(parsed?.theme.backgrounds.title).toBeNull();
+  });
+});
+
 describe('parseDeck two-column migration', () => {
   it('moves a flat two-column body into a columns container split in half', () => {
     const parsed = parseDeck(

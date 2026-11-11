@@ -571,6 +571,85 @@ describe('images in export', () => {
   });
 });
 
+describe('slide backgrounds', () => {
+  const src = 'data:image/png;base64,AAAA';
+  const image = {
+    src,
+    name: 'backdrop.png',
+    opacity: 40,
+    mode: 'scale' as const,
+    scale: 50,
+    position: 'top-right' as const,
+  };
+  const title: Slide = { id: 't', kind: 'title', title: '', layout: 'normal', body: [] };
+
+  function backgroundsDeck(backgrounds: Deck['theme']['backgrounds'], slides: Slide[] = [title, frame([], { title: 'Body' })]) {
+    return deck({ theme: { ...DEFAULT_THEME, backgrounds }, slides });
+  }
+
+  it('emits a reusable canvas template with fill, anchor, opacity and size', () => {
+    const tex = toLatex(backgroundsDeck({ all: image, title: null, section: null }));
+    expect(tex).toMatch(/\\definecolor\{bxBackgroundFill\}\{HTML\}\{[0-9A-F]{6}\}/);
+    expect(tex).toContain('\\usepackage{tikz}');
+    expect(tex).toContain('\\usebackgroundtemplate{%');
+    expect(tex).toContain('\\fill[bxBackgroundFill] (0,0) rectangle (160.00mm,90.00mm);');
+    expect(tex).toContain(
+      '\\node[anchor=north east,inner sep=0pt,opacity=0.40] at (160.00mm,90.00mm) {\\includegraphics[width=80.00mm]{backdrop.png}};',
+    );
+    expect(tex.match(/\\usebackgroundtemplate/g)).toHaveLength(1);
+  });
+
+  it('supports fit and stretch sizing', () => {
+    const fit = toLatex(
+      backgroundsDeck({ all: { ...image, mode: 'fit' }, title: null, section: null }),
+    );
+    expect(fit).toContain('\\includegraphics[width=\\paperwidth,height=\\paperheight,keepaspectratio]{backdrop.png}');
+    const stretch = toLatex(
+      backgroundsDeck({ all: { ...image, mode: 'stretch' }, title: null, section: null }),
+    );
+    expect(stretch).toContain('\\includegraphics[width=\\paperwidth,height=\\paperheight]{backdrop.png}');
+  });
+
+  it('uses the title override and restores the shared image', () => {
+    const tex = toLatex(
+      backgroundsDeck({
+        all: image,
+        title: { ...image, name: 'title-bg.png' },
+        section: null,
+      }),
+    );
+    expect(tex).toContain('{title-bg.png}');
+    expect(tex).toContain('{backdrop.png}');
+    expect(tex.indexOf('{title-bg.png}')).toBeLessThan(tex.indexOf('{backdrop.png}'));
+  });
+
+  it('fills the canvas when only title pages have an image', () => {
+    const tex = toLatex(backgroundsDeck({ all: null, title: image, section: null }));
+    expect(tex).toContain('{backdrop.png}');
+    expect(tex).toContain('\\fill[bxBackgroundFill]');
+  });
+
+  it('renders no background machinery when no image is set', () => {
+    const tex = toLatex(deck());
+    expect(tex).not.toContain('\\usebackgroundtemplate');
+    expect(tex).not.toContain('bxBackgroundFill');
+  });
+
+  it('collects background images with stable keys', () => {
+    const images = collectImages(
+      backgroundsDeck({
+        all: image,
+        title: { ...image, name: 'title-bg.png' },
+        section: null,
+      }),
+    );
+    expect(images.map((entry) => [entry.key, entry.name])).toEqual([
+      ['bg:all', 'backdrop.png'],
+      ['bg:title', 'title-bg.png'],
+    ]);
+  });
+});
+
 describe('sample deck export', () => {
   it('produces a complete document', () => {
     const tex = toLatex(createSampleDeck());
