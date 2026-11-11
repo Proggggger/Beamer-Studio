@@ -160,3 +160,29 @@ export const GALLERY_SLIDE: Slide = {
     },
   ],
 };
+
+/** Color themes mostly differ in block/bar colors, so color swatches preview a block. */
+export const COLOR_GALLERY_SLIDE: Slide = {
+  id: 'color-gallery',
+  kind: 'frame',
+  title: 'Frame',
+  layout: 'normal',
+  body: [
+    {
+      id: 'color-gallery-block',
+      type: 'block',
+      tone: 'normal',
+      title: 'Block',
+      body: [{ id: 'color-gallery-text', type: 'paragraph', text: 'Text' }],
+    },
+    {
+      id: 'color-gallery-list',
+      type: 'list',
+      ordered: false,
+      items: [
+        { id: 'color-gallery-item-1', text: 'Item', depth: 0 },
+        { id: 'color-gallery-item-2', text: 'Item', depth: 0 },
+      ],
+    },
+  ],
+};

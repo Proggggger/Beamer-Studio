@@ -106,6 +106,31 @@ describe('resolveTheme', () => {
     expect(resolved.palette).toBeDefined();
   });
 
+  it('mirrors colortheme titlelike/frametitle inheritance from the stock .sty files', () => {
+    const madrid = (colorTheme: ThemeSettings['colorTheme']) =>
+      resolveTheme(settings({ template: 'Madrid', colorTheme }), '169').palette;
+
+    // lily sets titlelike=structure and the default frametitle inherits it.
+    expect(madrid('lily').titlelike.bg).toBe('transparent');
+    expect(madrid('lily').frametitle.bg).toBe('transparent');
+    // seagull and albatross keep whale's titlelike (palette primary) fill.
+    expect(madrid('seagull').frametitle.bg).toBe('#cccccc');
+    expect(madrid('albatross').frametitle.bg).toBe('#000060');
+    // crane only sets titlelike, so its frametitle uses the same orange.
+    expect(madrid('crane').frametitle.bg).toBe('#fcbb06');
+  });
+
+  it('resets plain-title themes before an extra colortheme layers on top', () => {
+    const hannover = resolveTheme(settings({ template: 'Hannover', colorTheme: 'seahorse' }), '169').palette;
+    expect(hannover.titlelike.bg).toBe('transparent');
+    expect(hannover.frametitle.bg).toBe('transparent');
+    const malmoe = resolveTheme(settings({ template: 'Malmoe' }), '169').palette;
+    expect(malmoe.frametitle.bg).toBe('transparent');
+    // \usecolortheme{crane} after \usetheme{Hannover} fills titlelike again.
+    const extra = resolveTheme(settings({ template: 'Hannover', colorTheme: 'crane' }), '169').palette;
+    expect(extra.frametitle.bg).toBe('#fcbb06');
+  });
+
   it('resolves every stock theme and color theme without throwing', () => {
     expect(THEME_NAMES).toHaveLength(29);
     expect(COLOR_THEME_NAMES).toHaveLength(19);

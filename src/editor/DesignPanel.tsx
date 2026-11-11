@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useDeckStore } from '../model/store';
-import { GALLERY_SLIDE } from '../model/defaults';
+import { COLOR_GALLERY_SLIDE, GALLERY_SLIDE } from '../model/defaults';
 import type { CustomColors } from '../model/types';
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
 import { TRANSPARENT, isHexColor } from '../themes/colorMath';
@@ -133,19 +133,24 @@ function TemplateGallery() {
 }
 
 function ColorGallery() {
-  const theme = useDeckStore((state) => state.deck.theme);
-  const aspect = useDeckStore((state) => state.deck.aspect);
+  const deck = useDeckStore((state) => state.deck);
+  const theme = deck.theme;
+  const aspect = deck.aspect;
   const setColorTheme = useDeckStore((state) => state.setColorTheme);
   const updateCustom = useDeckStore((state) => state.updateCustom);
   const resetCustom = useDeckStore((state) => state.resetCustom);
   const resolved = useMemo(() => resolveTheme(theme, aspect), [theme, aspect]);
   const previews = useMemo(
     () =>
-      COLOR_THEME_NAMES.map((name) => ({
-        name,
-        palette: resolveTheme({ ...theme, colorTheme: name, custom: { enabled: false } }, aspect).palette,
-      })),
-    [theme, aspect],
+      COLOR_THEME_NAMES.map((name) => {
+        const previewTheme = { ...theme, colorTheme: name, custom: { enabled: false } };
+        return {
+          name,
+          deck: { ...deck, theme: previewTheme },
+          resolved: resolveTheme(previewTheme, aspect),
+        };
+      }),
+    [deck, theme, aspect],
   );
   const custom = theme.custom;
   const fallbacks = {
@@ -162,9 +167,8 @@ function ColorGallery() {
   return (
     <>
       <div className="color-gallery">
-        {previews.map(({ name, palette }) => {
-          const primary = palette.palettePrimary.bg !== TRANSPARENT ? palette.palettePrimary.bg : palette.structure;
-          const secondary = palette.paletteSecondary.bg !== TRANSPARENT ? palette.paletteSecondary.bg : palette.structure;
+        {previews.map(({ name, deck: previewDeck, resolved: previewTheme }) => {
+          const scale = 120 / previewTheme.page.w;
           return (
             <button
               key={name}
@@ -172,12 +176,13 @@ function ColorGallery() {
               className={`color-card${name === theme.colorTheme ? ' is-active' : ''}`}
               onClick={() => setColorTheme(name)}
             >
-              <span className="color-chips">
-                <span style={{ background: primary }} />
-                <span style={{ background: secondary }} />
-                <span style={{ background: palette.structure }} />
-                <span style={{ background: palette.bg, borderColor: palette.fg }} />
-              </span>
+              <ScaledSlide
+                deck={previewDeck}
+                slide={COLOR_GALLERY_SLIDE}
+                slideIndex={0}
+                theme={previewTheme}
+                scale={scale}
+              />
               <span className="color-name">{name}</span>
             </button>
           );

@@ -34,14 +34,22 @@ export function solid(swatch: Swatch): string {
 
 export function resolveTheme(settings: ThemeSettings, aspect: Aspect): ResolvedTheme {
   const spec = themeSpec(settings.template);
-  const layers = [...spec.colorThemes];
-  if (!layers.includes(settings.colorTheme)) layers.push(settings.colorTheme);
-  const layered = applyColorThemes(layers);
+  const layered = applyColorThemes(spec.colorThemes);
   // Hannover/Malmoe/Marburg override `titlelike` to parent=structure in their
-  // theme files, so stock Beamer fills nothing behind the section title.
-  const themed = spec.titlelikePlain
-    ? { ...layered, titlelike: { fg: layered.structure, bg: TRANSPARENT } }
+  // theme files; beamer's default frametitle inherits it, so nothing is filled
+  // behind the frame or section title. An extra `\usecolortheme` layers after
+  // this, so a selected theme that sets titlelike still gets its fill back.
+  const withThemeOverride = spec.titlelikePlain
+    ? {
+        ...layered,
+        titlelike: { fg: layered.structure, bg: TRANSPARENT },
+        frametitle: { fg: layered.structure, bg: TRANSPARENT },
+        framesubtitleFg: layered.structure,
+      }
     : layered;
+  const themed = spec.colorThemes.includes(settings.colorTheme)
+    ? withThemeOverride
+    : applyColorThemes([settings.colorTheme], withThemeOverride);
   const palette = applyCustomColors(themed, settings.custom);
 
   const page = aspect === '169' ? { w: 960, h: 540 } : { w: 800, h: 600 };

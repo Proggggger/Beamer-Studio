@@ -162,7 +162,8 @@ const crane: ThemeFn = (p) => ({
   sidebarSecondary: mix(craneBlue, WHITE, 75),
   sidebarTertiary: mix(craneBlue, WHITE, 75),
   sidebarQuaternary: craneBlue,
-  frametitle: { fg: craneBlue, bg: mix(craneOrange, WHITE, 80) },
+  // crane.sty sets only titlelike; the default frametitle inherits its fill.
+  frametitle: { fg: craneBlue, bg: craneOrange },
   framesubtitleFg: craneBlue,
   blockTitle: { fg: craneBlue, bg: craneOrange },
   blockTitleAlert: { fg: craneBlue, bg: mix(p.alert, WHITE, 75) },
@@ -300,8 +301,9 @@ const albatross: ThemeFn = (p) => {
     blockTitleExample: { fg: mix(mix(GREEN, BLACK, 65), WHITE, 25), bg: mix(normalBg, BLACK, 75) },
     blockBodyAlert: { fg: normalFg, bg: mix(normalBg, BLACK, 90) },
     blockBodyExample: { fg: normalFg, bg: mix(normalBg, BLACK, 90) },
-    titlelike: { fg: structure, bg: TRANSPARENT },
-    frametitle: { fg: structure, bg: TRANSPARENT },
+    // albatross.sty keeps whale's titlelike (palette primary) fill.
+    titlelike: { fg: structure, bg: mix(normalBg, BLACK, 75) },
+    frametitle: { fg: structure, bg: mix(normalBg, BLACK, 75) },
     framesubtitleFg: structure,
   };
 };
@@ -315,6 +317,9 @@ const lily: ThemeFn = (p) => ({
   blockBodyAlert: { fg: p.fg, bg: TRANSPARENT },
   blockBodyExample: { fg: p.fg, bg: TRANSPARENT },
   titlelike: { fg: p.structure, bg: TRANSPARENT },
+  // lily sets titlelike=structure; beamer's default frametitle inherits titlelike.
+  frametitle: { fg: p.structure, bg: TRANSPARENT },
+  framesubtitleFg: p.structure,
 });
 
 const rose: ThemeFn = (p) => ({
@@ -350,8 +355,9 @@ const seagull: ThemeFn = (p) => ({
   blockBody: { fg: BLACK, bg: mix(BLACK, WHITE, 10) },
   blockBodyAlert: { fg: BLACK, bg: mix(BLACK, WHITE, 10) },
   blockBodyExample: { fg: BLACK, bg: mix(BLACK, WHITE, 10) },
-  titlelike: { fg: BLACK, bg: TRANSPARENT },
-  frametitle: { fg: BLACK, bg: TRANSPARENT },
+  // No titlelike override in seagull.sty: it keeps whale's palette-primary fill.
+  titlelike: { fg: BLACK, bg: mix(BLACK, WHITE, 20) },
+  frametitle: { fg: BLACK, bg: mix(BLACK, WHITE, 20) },
   framesubtitleFg: BLACK,
 });
 
@@ -447,9 +453,9 @@ export const COLOR_THEMES: Record<ColorThemeName, ThemeFn> = {
   wolverine,
 };
 
-export function applyColorThemes(names: ColorThemeName[]): Palette {
+export function applyColorThemes(names: ColorThemeName[], base: Palette = BASE_PALETTE): Palette {
   return names.reduce<Palette>((palette, name) => (COLOR_THEMES[name] ?? identity)(palette), {
-    ...BASE_PALETTE,
+    ...base,
   });
 }
 
