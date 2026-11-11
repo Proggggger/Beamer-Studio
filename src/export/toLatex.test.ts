@@ -121,15 +121,19 @@ describe('toLatex slides', () => {
     expect(tex).toContain('\\sectionpage');
   });
 
-  it('includes a frame subtitle in the frame title', () => {
-    const tex = toLatex(deck({ slides: [frame([], { title: 'Main', subtitle: 'Sub' })] }));
-    expect(tex).toContain('\\begin{frame}{Main}{Sub}');
+  it('always emits both title and subtitle groups on a frame', () => {
+    const withSub = toLatex(deck({ slides: [frame([], { title: 'Main', subtitle: 'Sub' })] }));
+    expect(withSub).toContain('\\begin{frame}{Main}{Sub}');
+    const withoutSub = toLatex(deck({ slides: [frame([], { title: 'Main' })] }));
+    expect(withoutSub).toContain('\\begin{frame}{Main}{}');
+    const untitled = toLatex(deck({ slides: [frame([], { title: '' })] }));
+    expect(untitled).toContain('\\begin{frame}{}{}');
   });
 
   it('marks frames containing code as fragile', () => {
     const body: Block[] = [{ id: 'c', type: 'code', lang: 'ts', text: 'const a = 1;' }];
     const tex = toLatex(deck({ slides: [frame(body, { title: 'Code' })] }));
-    expect(tex).toContain('\\begin{frame}[fragile]{Code}');
+    expect(tex).toContain('\\begin{frame}[fragile]{Code}{}');
     expect(tex).toContain('\\begin{verbatim}');
     expect(tex).toContain('const a = 1;');
     expect(tex).toContain('\\end{verbatim}');
@@ -216,6 +220,23 @@ describe('toLatex slides', () => {
     expect(tex).not.toContain('BodyFg');
     expect(tex).toContain('\\begin{alertblock}{Careful}');
     expect(tex).toMatch(/\\begin\{alertblock\}\{Careful\}\s+Text\s+\\end\{alertblock\}\s+\}/);
+  });
+
+  it('keeps a leading override group out of the frame subtitle', () => {
+    const body: Block[] = [
+      {
+        id: 'b1',
+        type: 'block',
+        tone: 'normal',
+        title: 'Plain',
+        colors: { titleBg: '#f00' },
+        body: [],
+      },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body, { title: 'Frame' })] }));
+    const frameLine = tex.split('\n').find((line) => line.startsWith('\\begin{frame}'));
+    expect(frameLine).toBe('\\begin{frame}{Frame}{}');
+    expect(tex).toContain('\\begin{frame}{Frame}{}\n  {%\n');
   });
 
   it('keeps normal and example blocks ungrouped when they have no overrides', () => {

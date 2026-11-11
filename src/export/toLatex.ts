@@ -270,13 +270,10 @@ function renderSlide(
 
   const fragile = hasCode(slide.body);
   const options = fragile ? '[fragile]' : '';
-  const title =
-    slide.title && slide.subtitle
-      ? `{${slide.title}}{${slide.subtitle}}`
-      : slide.title
-        ? `{${slide.title}}`
-        : '';
-  lines.push(`\\begin{frame}${options}${title}`);
+  // Beamer treats a braced group right after the title argument as the frame
+  // subtitle, so both groups must always be present; otherwise a leading
+  // color-override group would be swallowed into the title.
+  lines.push(`\\begin{frame}${options}{${slide.title}}{${slide.subtitle ?? ''}}`);
   renderBlocks(slide.body, lines, 1, imageNames);
   lines.push('\\end{frame}');
   lines.push('');
