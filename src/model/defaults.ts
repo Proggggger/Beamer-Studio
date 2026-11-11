@@ -1,5 +1,5 @@
 import { uid } from './ids';
-import type { Block, Deck, DeckMeta, Slide, ThemeSettings } from './types';
+import type { Block, Deck, DeckMeta, DocumentSettings, Slide, ThemeSettings } from './types';
 
 export const DEFAULT_META: DeckMeta = {
   title: 'Untitled presentation',
@@ -13,12 +13,18 @@ export const DEFAULT_THEME: ThemeSettings = {
   template: 'Madrid',
   colorTheme: 'whale',
   custom: { enabled: false },
-  fontFamily: 'sans',
+  fontFamily: 'latin-modern-sans',
   fontScale: 1,
   bulletShape: 'theme',
   blockShape: 'theme',
   blockShadow: true,
   navigationSymbols: true,
+};
+
+export const DEFAULT_DOCUMENT: DocumentSettings = {
+  mainLanguage: 'english',
+  otherLanguages: [],
+  fontSize: 11,
 };
 
 function titleSlide(): Slide {
@@ -48,6 +54,7 @@ export function createEmptyDeck(): Deck {
     meta: { ...DEFAULT_META },
     aspect: '169',
     theme: { ...DEFAULT_THEME, custom: { ...DEFAULT_THEME.custom } },
+    document: { ...DEFAULT_DOCUMENT, otherLanguages: [...DEFAULT_DOCUMENT.otherLanguages] },
     slides: [titleSlide(), frameSlide('New frame', [list([{ text: 'Start writing here' }])])],
   };
 }
@@ -75,7 +82,7 @@ export function createSampleDeck(): Deck {
       {
         id: uid('block'),
         type: 'paragraph',
-        text: 'The generated .tex file is ordinary Beamer and compiles with pdflatex.',
+        text: 'The generated .tex file is ordinary Beamer and compiles with XeLaTeX.',
       },
     ],
   };
@@ -91,6 +98,7 @@ export function createSampleDeck(): Deck {
     },
     aspect: '169',
     theme: { ...DEFAULT_THEME, custom: { ...DEFAULT_THEME.custom } },
+    document: { ...DEFAULT_DOCUMENT, otherLanguages: [...DEFAULT_DOCUMENT.otherLanguages] },
     slides: [
       titleSlide(),
       frameSlide(

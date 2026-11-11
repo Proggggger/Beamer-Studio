@@ -24,6 +24,7 @@ import type {
   CustomColors,
   Deck,
   DeckMeta,
+  DocumentSettings,
   Item,
   Slide,
   SlideKind,
@@ -59,6 +60,7 @@ interface DeckStore {
   setShowExport: (open: boolean) => void;
 
   updateMeta: (patch: Partial<DeckMeta>, key?: string) => void;
+  updateDocument: (patch: Partial<DocumentSettings>, key?: string) => void;
   updateTheme: (patch: Partial<ThemeSettings>, key?: string) => void;
   setAspect: (aspect: Aspect) => void;
   setTemplate: (template: ThemeName) => void;
@@ -157,6 +159,9 @@ export const useDeckStore = create<DeckStore>((set, get) => {
 
     updateMeta: (patch, key) =>
       commit((deck) => ({ ...deck, meta: { ...deck.meta, ...patch } }), key),
+
+    updateDocument: (patch, key) =>
+      commit((deck) => ({ ...deck, document: { ...deck.document, ...patch } }), key),
 
     updateTheme: (patch, key) =>
       commit((deck) => ({ ...deck, theme: { ...deck.theme, ...patch } }), key),

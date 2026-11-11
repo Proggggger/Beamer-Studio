@@ -2,6 +2,8 @@ import { splitParagraphs } from '../model/paragraphs';
 import type { Block, BlockColorOverrides, BlockTone, Deck, ImageBlock, Item, Slide } from '../model/types';
 import { themeSpec } from '../themes/beamerThemes';
 import { readableOn, shade } from '../themes/colorMath';
+import { fontOption } from '../themes/fonts';
+import { languageOption, languageScripts } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
 
 const INDENT = '  ';
@@ -295,14 +297,15 @@ const BULLET_TEMPLATES: Record<string, { item: string; sub: string; subsub: stri
 };
 
 export function toLatex(deck: Deck): string {
-  const { theme } = deck;
+  const { theme, document: settings } = deck;
   const spec = themeSpec(theme.template);
   const lines: string[] = [];
 
+  lines.push('% !TeX program = xelatex');
   if (deck.aspect === '169') {
-    lines.push('\\documentclass[aspectratio=169,11pt]{beamer}');
+    lines.push(`\\documentclass[aspectratio=169,${settings.fontSize}pt]{beamer}`);
   } else {
-    lines.push('\\documentclass[11pt]{beamer}');
+    lines.push(`\\documentclass[${settings.fontSize}pt]{beamer}`);
   }
   lines.push(`\\usetheme{${theme.template}}`);
   if (!spec.colorThemes.includes(theme.colorTheme)) {
@@ -314,7 +317,50 @@ export function toLatex(deck: Deck): string {
     }
   }
 
-  if (theme.fontFamily === 'serif') lines.push('\\usefonttheme{serif}');
+  const font = fontOption(theme.fontFamily);
+  const languageIds = [settings.mainLanguage, ...settings.otherLanguages];
+  const scripts = languageScripts(languageIds);
+
+  lines.push('\\usepackage{fontspec}');
+  lines.push('\\usepackage{polyglossia}');
+  lines.push(`\\setmainlanguage{${languageOption(settings.mainLanguage).tex}}`);
+  for (const id of settings.otherLanguages) {
+    lines.push(`\\setotherlanguage{${languageOption(id).tex}}`);
+  }
+  lines.push('\\usefonttheme{professionalfonts}');
+  lines.push('\\defaultfontfeatures{Ligatures=TeX}');
+
+  const latinFallback = font.kind === 'serif' ? 'Latin Modern Roman' : 'Latin Modern Sans';
+  lines.push(`\\IfFontExistsTF{${font.tex}}{%`);
+  lines.push(`  \\setsansfont{${font.tex}}%`);
+  lines.push(`  \\setmainfont{${font.tex}}%`);
+  lines.push('}{%');
+  lines.push(
+    `  \\PackageWarning{beamer-editor}{Font "${font.tex}" is not installed; using ${latinFallback}}%`,
+  );
+  lines.push(`  \\setsansfont{${latinFallback}}%`);
+  lines.push(`  \\setmainfont{${latinFallback}}%`);
+  lines.push('}');
+  const mono = font.monoTex ?? 'Latin Modern Mono';
+  lines.push(`\\IfFontExistsTF{${mono}}{\\setmonofont{${mono}}}{}`);
+
+  if (scripts.has('greek') || scripts.has('cyrillic')) {
+    // Script fonts need explicit declarations under fontspec; fall back to any
+    // installed face that carries Greek and Cyrillic coverage.
+    lines.push('\\newcommand{\\bxscriptfonts}[1]{%');
+    lines.push('  \\newfontfamily\\greekfont{#1}%');
+    lines.push('  \\newfontfamily\\greekfontsf{#1}%');
+    lines.push('  \\newfontfamily\\cyrillicfont{#1}%');
+    lines.push('  \\newfontfamily\\cyrillicfontsf{#1}%');
+    lines.push('}');
+    lines.push('\\IfFontExistsTF{Noto Serif}{\\bxscriptfonts{Noto Serif}}{%');
+    lines.push('  \\IfFontExistsTF{DejaVu Serif}{\\bxscriptfonts{DejaVu Serif}}{%');
+    lines.push('    \\IfFontExistsTF{Times New Roman}{\\bxscriptfonts{Times New Roman}}{%');
+    lines.push('      \\bxscriptfonts{Arial}%');
+    lines.push('    }%');
+    lines.push('  }%');
+    lines.push('}');
+  }
 
   if (theme.custom.enabled) {
     const custom = theme.custom;

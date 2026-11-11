@@ -15,7 +15,10 @@ export function SlideRail() {
   const duplicateSlide = useDeckStore((state) => state.duplicateSlide);
   const deleteSlide = useDeckStore((state) => state.deleteSlide);
   const moveSlide = useDeckStore((state) => state.moveSlide);
-  const theme = useMemo(() => resolveTheme(deck.theme, deck.aspect), [deck.theme, deck.aspect]);
+  const theme = useMemo(
+    () => resolveTheme(deck.theme, deck.aspect, deck.document.fontSize),
+    [deck.theme, deck.aspect, deck.document.fontSize],
+  );
   const scale = THUMB_WIDTH / theme.page.w;
 
   const add = (kind: SlideKind) => addSlide(kind);

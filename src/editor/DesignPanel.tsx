@@ -1,9 +1,11 @@
 import { useMemo, type ReactNode } from 'react';
 import { useDeckStore } from '../model/store';
 import { COLOR_GALLERY_SLIDE, GALLERY_SLIDE } from '../model/defaults';
-import type { CustomColors } from '../model/types';
+import type { CustomColors, FontId, FontSizePt, LanguageId } from '../model/types';
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
 import { TRANSPARENT } from '../themes/colorMath';
+import { FONT_OPTIONS, FONT_SIZES, fontOption } from '../themes/fonts';
+import { LANGUAGE_OPTIONS, languageOption } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
 import { ScaledSlide } from '../render/SlideCanvas';
 import { ColorField } from './ColorField';
@@ -28,6 +30,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function TemplateGallery() {
   const theme = useDeckStore((state) => state.deck.theme);
   const aspect = useDeckStore((state) => state.deck.aspect);
+  const document = useDeckStore((state) => state.deck.document);
   const setTemplate = useDeckStore((state) => state.setTemplate);
   const previews = useMemo(
     () =>
@@ -42,10 +45,11 @@ function TemplateGallery() {
             blockShadow: spec.shadow,
           },
           aspect,
+          document.fontSize,
         );
         return { name, spec, resolved };
       }),
-    [theme, aspect],
+    [theme, aspect, document.fontSize],
   );
 
   return (
@@ -61,7 +65,7 @@ function TemplateGallery() {
             title={`${name} · ${spec.outer} outer · ${spec.inner} inner`}
           >
             <ScaledSlide
-              deck={{ version: 1, meta: { title: 'Title', subtitle: 'Subtitle', author: '', institute: '', date: '' }, aspect, theme: { ...theme, template: name, custom: { enabled: false } }, slides: [GALLERY_SLIDE] }}
+              deck={{ version: 1, meta: { title: 'Title', subtitle: 'Subtitle', author: '', institute: '', date: '' }, aspect, theme: { ...theme, template: name, custom: { enabled: false } }, document, slides: [GALLERY_SLIDE] }}
               slide={GALLERY_SLIDE}
               slideIndex={0}
               theme={resolved}
@@ -82,10 +86,11 @@ function ColorGallery() {
   const deck = useDeckStore((state) => state.deck);
   const theme = deck.theme;
   const aspect = deck.aspect;
+  const fontSize = deck.document.fontSize;
   const setColorTheme = useDeckStore((state) => state.setColorTheme);
   const updateCustom = useDeckStore((state) => state.updateCustom);
   const resetCustom = useDeckStore((state) => state.resetCustom);
-  const resolved = useMemo(() => resolveTheme(theme, aspect), [theme, aspect]);
+  const resolved = useMemo(() => resolveTheme(theme, aspect, fontSize), [theme, aspect, fontSize]);
   const previews = useMemo(
     () =>
       COLOR_THEME_NAMES.map((name) => {
@@ -93,10 +98,10 @@ function ColorGallery() {
         return {
           name,
           deck: { ...deck, theme: previewTheme },
-          resolved: resolveTheme(previewTheme, aspect),
+          resolved: resolveTheme(previewTheme, aspect, fontSize),
         };
       }),
-    [deck, theme, aspect],
+    [deck, theme, aspect, fontSize],
   );
   const custom = theme.custom;
   const fallbacks = {
@@ -167,9 +172,27 @@ function ColorGallery() {
 function LayoutSettings() {
   const deck = useDeckStore((state) => state.deck);
   const theme = deck.theme;
+  const document = deck.document;
   const setAspect = useDeckStore((state) => state.setAspect);
   const updateTheme = useDeckStore((state) => state.updateTheme);
+  const updateDocument = useDeckStore((state) => state.updateDocument);
   const spec = themeSpec(theme.template);
+  const font = fontOption(theme.fontFamily);
+  const sansFonts = FONT_OPTIONS.filter((option) => option.kind === 'sans');
+  const serifFonts = FONT_OPTIONS.filter((option) => option.kind === 'serif');
+
+  const setMainLanguage = (id: LanguageId) =>
+    updateDocument({
+      mainLanguage: id,
+      otherLanguages: document.otherLanguages.filter((entry) => entry !== id),
+    });
+
+  const toggleOtherLanguage = (id: LanguageId) =>
+    updateDocument({
+      otherLanguages: document.otherLanguages.includes(id)
+        ? document.otherLanguages.filter((entry) => entry !== id)
+        : [...document.otherLanguages, id],
+    });
 
   return (
     <>
@@ -198,12 +221,39 @@ function LayoutSettings() {
         <Field label="Font family">
           <select
             value={theme.fontFamily}
+            onChange={(event) => updateTheme({ fontFamily: event.target.value as FontId })}
+          >
+            <optgroup label="Sans serif">
+              {sansFonts.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Serif">
+              {serifFonts.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </Field>
+        <p className="panel-hint">
+          {font.tex} + {font.monoTex ?? 'Latin Modern Mono'} via fontspec in the export.
+        </p>
+        <Field label="Base font size">
+          <select
+            value={document.fontSize}
             onChange={(event) =>
-              updateTheme({ fontFamily: event.target.value as 'sans' | 'serif' })
+              updateDocument({ fontSize: Number(event.target.value) as FontSizePt })
             }
           >
-            <option value="sans">Sans (Latin Modern Sans)</option>
-            <option value="serif">Serif (Computer Modern)</option>
+            {FONT_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}pt
+              </option>
+            ))}
           </select>
         </Field>
         <Field label={`Font scale · ${Math.round(theme.fontScale * 100)}%`}>
@@ -216,6 +266,47 @@ function LayoutSettings() {
             onChange={(event) => updateTheme({ fontScale: Number(event.target.value) }, 'fontScale')}
           />
         </Field>
+      </section>
+
+      <section className="panel-section">
+        <h3>Language</h3>
+        <Field label="Main language">
+          <select
+            value={document.mainLanguage}
+            onChange={(event) => setMainLanguage(event.target.value as LanguageId)}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <p className="panel-hint">
+          Set with polyglossia: \setmainlanguage{'{'}
+          {languageOption(document.mainLanguage).tex}
+          {'}'}.
+        </p>
+        <div className="field">
+          <span className="field-label">Additional languages</span>
+          <div className="lang-list">
+            {LANGUAGE_OPTIONS.filter((option) => option.id !== document.mainLanguage).map(
+              (option) => (
+                <label key={option.id} className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={document.otherLanguages.includes(option.id)}
+                    onChange={() => toggleOtherLanguage(option.id)}
+                  />
+                  {option.label}
+                </label>
+              ),
+            )}
+          </div>
+        </div>
+        <p className="panel-hint">
+          Greek and Cyrillic scripts pick a fallback face that carries the glyphs.
+        </p>
       </section>
 
       <section className="panel-section">

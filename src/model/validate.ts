@@ -1,13 +1,18 @@
 import { COLOR_THEME_NAMES, THEME_SPECS } from '../themes/beamerThemes';
+import { FONT_IDS, FONT_SIZES } from '../themes/fonts';
+import { LANGUAGE_IDS } from '../themes/languages';
 import { wrapInColumns } from './blockOps';
-import { DEFAULT_META, DEFAULT_THEME } from './defaults';
+import { DEFAULT_DOCUMENT, DEFAULT_META, DEFAULT_THEME } from './defaults';
 import { uid } from './ids';
 import type {
   Block,
   BlockColorOverrides,
   CustomColors,
   Deck,
+  DocumentSettings,
+  FontId,
   Item,
+  LanguageId,
   Slide,
   ThemeSettings,
 } from './types';
@@ -167,6 +172,42 @@ function validCustom(value: unknown): CustomColors {
   return custom;
 }
 
+/** Decks saved before XeLaTeX support stored the family as 'sans' | 'serif'. */
+const LEGACY_FONTS: Record<string, FontId> = {
+  sans: 'latin-modern-sans',
+  serif: 'latin-modern-roman',
+};
+
+function validFontId(value: unknown): FontId {
+  if (typeof value === 'string') {
+    if ((FONT_IDS as string[]).includes(value)) return value as FontId;
+    const legacy = LEGACY_FONTS[value];
+    if (legacy) return legacy;
+  }
+  return DEFAULT_THEME.fontFamily;
+}
+
+function validDocument(value: unknown): DocumentSettings {
+  const raw = isObject(value) ? value : {};
+  const known = (id: string): id is LanguageId => (LANGUAGE_IDS as string[]).includes(id);
+  const mainLanguage =
+    typeof raw.mainLanguage === 'string' && known(raw.mainLanguage)
+      ? raw.mainLanguage
+      : DEFAULT_DOCUMENT.mainLanguage;
+  const otherLanguages: LanguageId[] = [];
+  if (Array.isArray(raw.otherLanguages)) {
+    for (const entry of raw.otherLanguages) {
+      if (typeof entry !== 'string' || !known(entry)) continue;
+      if (entry === mainLanguage || otherLanguages.includes(entry)) continue;
+      otherLanguages.push(entry);
+    }
+  }
+  const fontSize = (FONT_SIZES as number[]).includes(raw.fontSize as number)
+    ? (raw.fontSize as DocumentSettings['fontSize'])
+    : DEFAULT_DOCUMENT.fontSize;
+  return { mainLanguage, otherLanguages, fontSize };
+}
+
 function validTheme(value: unknown): ThemeSettings {
   const raw = isObject(value) ? value : {};
   const template =
@@ -181,7 +222,7 @@ function validTheme(value: unknown): ThemeSettings {
     template,
     colorTheme,
     custom: validCustom(raw.custom),
-    fontFamily: raw.fontFamily === 'serif' ? 'serif' : 'sans',
+    fontFamily: validFontId(raw.fontFamily),
     fontScale:
       typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)
         ? Math.max(0.8, Math.min(1.3, raw.fontScale))
@@ -216,6 +257,7 @@ export function parseDeck(value: unknown): Deck | null {
     },
     aspect: value.aspect === '43' ? '43' : '169',
     theme: validTheme(value.theme),
+    document: validDocument(value.document),
     slides,
   };
 }

@@ -57,6 +57,64 @@ export type ColorThemeName =
 export type BulletShape = 'ball' | 'triangle' | 'circle' | 'square';
 export type BlockShape = 'rectangle' | 'rounded';
 
+export type FontId =
+  | 'latin-modern-sans'
+  | 'latin-modern-roman'
+  | 'tex-gyre-heros'
+  | 'tex-gyre-pagella'
+  | 'tex-gyre-termes'
+  | 'tex-gyre-bonum'
+  | 'tex-gyre-schola'
+  | 'tex-gyre-adventor'
+  | 'libertinus-sans'
+  | 'libertinus-serif'
+  | 'eb-garamond'
+  | 'fira-sans'
+  | 'source-sans-pro'
+  | 'dejavu-sans'
+  | 'dejavu-serif'
+  | 'noto-sans'
+  | 'noto-serif';
+
+export type LanguageId =
+  | 'english'
+  | 'german'
+  | 'french'
+  | 'spanish'
+  | 'italian'
+  | 'portuguese'
+  | 'dutch'
+  | 'swedish'
+  | 'norsk'
+  | 'danish'
+  | 'finnish'
+  | 'icelandic'
+  | 'polish'
+  | 'czech'
+  | 'slovak'
+  | 'magyar'
+  | 'romanian'
+  | 'catalan'
+  | 'croatian'
+  | 'turkish'
+  | 'latin'
+  | 'estonian'
+  | 'latvian'
+  | 'lithuanian'
+  | 'greek'
+  | 'russian'
+  | 'ukrainian'
+  | 'bulgarian';
+
+export type FontSizePt = 8 | 9 | 10 | 11 | 12 | 14 | 17 | 20;
+
+/** Settings that affect the generated XeLaTeX document as a whole. */
+export interface DocumentSettings {
+  mainLanguage: LanguageId;
+  otherLanguages: LanguageId[];
+  fontSize: FontSizePt;
+}
+
 export interface CustomColors {
   enabled: boolean;
   structure?: string;
@@ -70,7 +128,7 @@ export interface ThemeSettings {
   template: ThemeName;
   colorTheme: ColorThemeName;
   custom: CustomColors;
-  fontFamily: 'sans' | 'serif';
+  fontFamily: FontId;
   fontScale: number;
   bulletShape: 'theme' | BulletShape;
   blockShape: 'theme' | BlockShape;
@@ -188,6 +246,7 @@ export interface Deck {
   meta: DeckMeta;
   aspect: Aspect;
   theme: ThemeSettings;
+  document: DocumentSettings;
   slides: Slide[];
 }
 

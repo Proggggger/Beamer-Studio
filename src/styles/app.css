@@ -617,6 +617,27 @@ button:disabled {
   height: 15px;
 }
 
+.panel-hint {
+  margin: -3px 0 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ui-muted);
+}
+
+.lang-list {
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 3px 8px;
+  background: var(--ui-panel-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+}
+
+.lang-list .check-row {
+  margin: 4px 0;
+  font-size: 11.5px;
+}
+
 .segmented {
   display: flex;
   gap: 3px;

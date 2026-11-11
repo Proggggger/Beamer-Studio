@@ -10,7 +10,10 @@ export function PreviewPane() {
   const selectedBlockId = useDeckStore((state) => state.selectedBlockId);
   const selectedItemId = useDeckStore((state) => state.selectedItemId);
   const selectBlock = useDeckStore((state) => state.selectBlock);
-  const theme = useMemo(() => resolveTheme(deck.theme, deck.aspect), [deck.theme, deck.aspect]);
+  const theme = useMemo(
+    () => resolveTheme(deck.theme, deck.aspect, deck.document.fontSize),
+    [deck.theme, deck.aspect, deck.document.fontSize],
+  );
   const { ref, scale: fitScale } = useFitScale(theme.page.w, theme.page.h, 28);
   const [zoom, setZoom] = useState(1);
   const slideIndex = deck.slides.findIndex((slide) => slide.id === selectedSlideId);

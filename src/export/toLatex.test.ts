@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSampleDeck, DEFAULT_META, DEFAULT_THEME } from '../model/defaults';
+import { createSampleDeck, DEFAULT_DOCUMENT, DEFAULT_META, DEFAULT_THEME } from '../model/defaults';
 import type { Block, Deck, Slide } from '../model/types';
 import { collectImages, latexImageName, toLatex } from './toLatex';
 
@@ -9,6 +9,7 @@ function deck(patch: Partial<Deck> = {}): Deck {
     meta: { ...DEFAULT_META },
     aspect: '169',
     theme: { ...DEFAULT_THEME, custom: { ...DEFAULT_THEME.custom } },
+    document: { ...DEFAULT_DOCUMENT, otherLanguages: [] },
     slides: [{ id: 'frame-1', kind: 'frame', title: 'Hello', layout: 'normal', body: [] }],
     ...patch,
   };
@@ -35,6 +36,7 @@ describe('toLatex preamble', () => {
 
   it('emits the 16:9 document class and theme', () => {
     const tex = toLatex(deck());
+    expect(tex.startsWith('% !TeX program = xelatex')).toBe(true);
     expect(tex).toContain('\\documentclass[aspectratio=169,11pt]{beamer}');
     expect(tex).toContain('\\usetheme{Madrid}');
     expect(tex).not.toContain('\\usecolortheme{whale}');
@@ -46,18 +48,63 @@ describe('toLatex preamble', () => {
     expect(tex.trimEnd().endsWith('\\end{document}')).toBe(true);
   });
 
+  it('sets up fontspec and the default language for XeLaTeX', () => {
+    const tex = toLatex(deck());
+    expect(tex).toContain('\\usepackage{fontspec}');
+    expect(tex).toContain('\\usepackage{polyglossia}');
+    expect(tex).toContain('\\setmainlanguage{english}');
+    expect(tex).toContain('\\usefonttheme{professionalfonts}');
+    expect(tex).toContain('\\defaultfontfeatures{Ligatures=TeX}');
+    expect(tex).toContain('\\IfFontExistsTF{Latin Modern Sans}{%');
+    expect(tex).toContain('\\setsansfont{Latin Modern Sans}%');
+    expect(tex).toContain('\\setmainfont{Latin Modern Sans}%');
+    expect(tex).toContain('\\IfFontExistsTF{Latin Modern Mono}{\\setmonofont{Latin Modern Mono}}{}');
+    expect(tex).not.toContain('\\usefonttheme{serif}');
+  });
+
+  it('adds additional languages and script fonts for Greek and Cyrillic', () => {
+    const tex = toLatex(
+      deck({
+        document: {
+          mainLanguage: 'russian',
+          otherLanguages: ['english', 'greek'],
+          fontSize: 11,
+        },
+      }),
+    );
+    expect(tex).toContain('\\setmainlanguage{russian}');
+    expect(tex).toContain('\\setotherlanguage{english}');
+    expect(tex).toContain('\\setotherlanguage{greek}');
+    expect(tex).toContain('\\newfontfamily\\greekfont');
+    expect(tex).toContain('\\newfontfamily\\cyrillicfontsf');
+  });
+
+  it('uses the chosen font with a Latin Modern fallback and the class font size', () => {
+    const tex = toLatex(
+      deck({
+        theme: { ...DEFAULT_THEME, fontFamily: 'tex-gyre-pagella' },
+        document: { ...DEFAULT_DOCUMENT, otherLanguages: [], fontSize: 14 },
+      }),
+    );
+    expect(tex).toContain('\\documentclass[aspectratio=169,14pt]{beamer}');
+    expect(tex).toContain('\\IfFontExistsTF{TeX Gyre Pagella}{%');
+    expect(tex).toContain('\\setsansfont{TeX Gyre Pagella}%');
+    expect(tex).toContain('\\setsansfont{Latin Modern Roman}%');
+    expect(tex).not.toContain('\\bxscriptfonts');
+  });
+
   it('omits the aspect ratio for 4:3 decks', () => {
     const tex = toLatex(deck({ aspect: '43' }));
     expect(tex).toContain('\\documentclass[11pt]{beamer}');
     expect(tex).not.toContain('aspectratio=169');
   });
 
-  it('adds an extra color theme and serif font when requested', () => {
+  it('adds an extra color theme and switches the font family', () => {
     const tex = toLatex(
-      deck({ theme: { ...DEFAULT_THEME, colorTheme: 'rose', fontFamily: 'serif' } }),
+      deck({ theme: { ...DEFAULT_THEME, colorTheme: 'rose', fontFamily: 'latin-modern-roman' } }),
     );
     expect(tex).toContain('\\usecolortheme{rose}');
-    expect(tex).toContain('\\usefonttheme{serif}');
+    expect(tex).toContain('\\IfFontExistsTF{Latin Modern Roman}{%');
   });
 
   it('emits custom color definitions when enabled', () => {
@@ -245,7 +292,7 @@ describe('toLatex slides', () => {
       { id: 'b2', type: 'block', tone: 'example', title: 'Sample', body: [], colors: {} },
     ];
     const tex = toLatex(deck({ slides: [frame(body)] }));
-    expect(tex).not.toContain('{%');
+    expect(tex).not.toContain('\\begin{frame}{Frame}{}\n  {%\n');
     expect(tex).not.toContain('\\definecolor{bxBlock');
   });
 

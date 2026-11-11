@@ -37,6 +37,57 @@ describe('parseDeck block colors', () => {
   });
 });
 
+describe('parseDeck document settings', () => {
+  function legacy(theme: unknown, extra: Record<string, unknown> = {}): unknown {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as Record<string, unknown>;
+    delete raw.document;
+    raw.theme = { ...(raw.theme as object), ...(theme as object) };
+    return { ...raw, ...extra };
+  }
+
+  it('fills document settings on decks saved before XeLaTeX support', () => {
+    const parsed = parseDeck(legacy({ fontFamily: 'sans' }));
+    expect(parsed?.document).toEqual({
+      mainLanguage: 'english',
+      otherLanguages: [],
+      fontSize: 11,
+    });
+  });
+
+  it('maps the legacy font family values onto the font catalog', () => {
+    expect(parseDeck(legacy({ fontFamily: 'serif' }))?.theme.fontFamily).toBe('latin-modern-roman');
+    expect(parseDeck(legacy({ fontFamily: 'sans' }))?.theme.fontFamily).toBe('latin-modern-sans');
+    expect(parseDeck(legacy({ fontFamily: 'tex-gyre-pagella' }))?.theme.fontFamily).toBe(
+      'tex-gyre-pagella',
+    );
+  });
+
+  it('dedupes additional languages, drops the main one and rejects unknown ids', () => {
+    const parsed = parseDeck(
+      legacy(
+        {},
+        {
+          document: {
+            mainLanguage: 'russian',
+            otherLanguages: ['english', 'english', 'russian', 'klingon', 'greek'],
+            fontSize: 14,
+          },
+        },
+      ),
+    );
+    expect(parsed?.document).toEqual({
+      mainLanguage: 'russian',
+      otherLanguages: ['english', 'greek'],
+      fontSize: 14,
+    });
+  });
+
+  it('falls back to 11pt for an unsupported font size', () => {
+    const parsed = parseDeck(legacy({}, { document: { fontSize: 13 } }));
+    expect(parsed?.document.fontSize).toBe(11);
+  });
+});
+
 describe('parseDeck two-column migration', () => {
   it('moves a flat two-column body into a columns container split in half', () => {
     const parsed = parseDeck(

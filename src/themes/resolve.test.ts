@@ -32,9 +32,24 @@ describe('resolveTheme', () => {
     const normal = resolveTheme(settings({ fontScale: 1 }), '169');
     const large = resolveTheme(settings({ fontScale: 1.25 }), '169');
     expect(large.font.base).toBeCloseTo(normal.font.base * 1.25, 5);
-    expect(normal.font.family).not.toBe('');
-    const serif = resolveTheme(settings({ fontFamily: 'serif' }), '169');
+    expect(normal.font.family).toContain('Latin Modern Sans');
+    const serif = resolveTheme(settings({ fontFamily: 'latin-modern-roman' }), '169');
+    expect(serif.font.family).toContain('Latin Modern Roman');
     expect(serif.font.family).not.toBe(normal.font.family);
+  });
+
+  it('scales the base font with the document font size', () => {
+    const eleven = resolveTheme(settings(), '169', 11);
+    const fourteen = resolveTheme(settings(), '169', 14);
+    expect(fourteen.font.base).toBeCloseTo(eleven.font.base * (14 / 11), 5);
+    expect(fourteen.cssVars['--fs-base']).toBe(`${fourteen.font.base}px`);
+  });
+
+  it('exposes the chosen font stack and its mono companion', () => {
+    const resolved = resolveTheme(settings({ fontFamily: 'fira-sans' }), '169');
+    expect(resolved.font.family).toContain('Fira Sans');
+    expect(resolved.font.mono).toContain('Fira Mono');
+    expect(resolved.cssVars['--font-mono']).toContain('Fira Mono');
   });
 
   it('honors explicit bullet and block shape overrides', () => {

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDeckStore } from '../model/store';
 import { dataUrlToBlob, downloadBlob, downloadText, slugify } from '../export/download';
 import { collectImages, toLatex } from '../export/toLatex';
+import { fontOption } from '../themes/fonts';
+import { languageOption } from '../themes/languages';
 
 export function ExportDialog() {
   const deck = useDeckStore((state) => state.deck);
@@ -11,6 +13,9 @@ export function ExportDialog() {
   const tex = useMemo(() => toLatex(deck), [deck]);
   const images = useMemo(() => collectImages(deck), [deck]);
   const filename = `${slugify(deck.meta.title)}.tex`;
+  const font = fontOption(deck.theme.fontFamily);
+  const mainLanguage = languageOption(deck.document.mainLanguage);
+  const extraLanguages = deck.document.otherLanguages.map((id) => languageOption(id).label);
 
   useEffect(() => {
     if (!showExport) return;
@@ -58,6 +63,10 @@ export function ExportDialog() {
             <h2>Export LaTeX</h2>
             <p className="muted small">
               {deck.slides.length} slides · {tex.split('\n').length} lines · {filename}
+            </p>
+            <p className="muted small">
+              XeLaTeX · {font.label} · {deck.document.fontSize}pt · {mainLanguage.label}
+              {extraLanguages.length > 0 ? ` + ${extraLanguages.join(', ')}` : ''}
             </p>
           </div>
           <button
@@ -112,8 +121,9 @@ export function ExportDialog() {
           </section>
         ) : null}
         <footer className="modal-foot muted small">
-          Compile with <code>pdflatex {filename}</code>. Beamer, xcolor and the chosen theme must be
-          installed (TeX Live or MiKTeX).
+          Compile with <code>xelatex {filename}</code> (the file starts with a{' '}
+          <code>% !TeX program = xelatex</code> comment). It uses fontspec and polyglossia, so
+          compile it with XeLaTeX rather than pdfLaTeX; the chosen font must be installed.
         </footer>
       </div>
     </div>

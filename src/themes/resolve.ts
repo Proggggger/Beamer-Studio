@@ -1,9 +1,10 @@
-import type { Aspect, ThemeSettings } from '../model/types';
+import type { Aspect, FontSizePt, ThemeSettings } from '../model/types';
 import type { ThemeSpec } from './beamerThemes';
 import { themeSpec } from './beamerThemes';
 import { applyColorThemes, applyCustomColors, type Palette, type Swatch } from './colorthemes';
 import { mix, TRANSPARENT } from './colorMath';
-import { MONO_STACK, SANS_STACK, SERIF_STACK, themeBlockRounded, themeBullet } from './typography';
+import { fontStack, monoStack } from './fonts';
+import { themeBlockRounded, themeBullet } from './typography';
 import type { BlockShape, BulletShape } from '../model/types';
 
 export interface ResolvedTheme {
@@ -32,7 +33,11 @@ export function solid(swatch: Swatch): string {
   return swatch.bg === TRANSPARENT ? swatch.fg : swatch.bg;
 }
 
-export function resolveTheme(settings: ThemeSettings, aspect: Aspect): ResolvedTheme {
+export function resolveTheme(
+  settings: ThemeSettings,
+  aspect: Aspect,
+  fontSize: FontSizePt = 11,
+): ResolvedTheme {
   const spec = themeSpec(settings.template);
   const layered = applyColorThemes(spec.colorThemes);
   // Hannover/Malmoe/Marburg override `titlelike` to parent=structure in their
@@ -53,15 +58,17 @@ export function resolveTheme(settings: ThemeSettings, aspect: Aspect): ResolvedT
   const palette = applyCustomColors(themed, settings.custom);
 
   const page = aspect === '169' ? { w: 960, h: 540 } : { w: 800, h: 600 };
-  const base = (page.w / 40) * settings.fontScale;
+  // The class option scales beamer's whole font size ladder; 11pt is the base
+  // the preview geometry was measured against.
+  const base = (page.w / 40) * settings.fontScale * (fontSize / 11);
   const font = {
     base,
     title: base * 1.5,
     subtitle: base * 0.95,
     small: base * 0.68,
     tiny: base * 0.56,
-    family: settings.fontFamily === 'serif' ? SERIF_STACK : SANS_STACK,
-    mono: MONO_STACK,
+    family: fontStack(settings.fontFamily),
+    mono: monoStack(settings.fontFamily),
   };
 
   const margin = page.w * 0.05;
