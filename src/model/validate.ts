@@ -16,7 +16,7 @@ import type {
   Item,
   LanguageId,
   Slide,
-  SlideBackgrounds,
+  SlideImageStacks,
   ThemeSettings,
 } from './types';
 
@@ -175,11 +175,18 @@ function validCustom(value: unknown): CustomColors {
   return custom;
 }
 
-function validBackground(value: unknown, fallbackId: string): BackgroundImageSettings | null {
+function validBackground(
+  value: unknown,
+  fallbackId: string,
+  fallbackName: string,
+): BackgroundImageSettings | null {
   if (!isObject(value)) return null;
   const src = str(value.src);
   if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(src)) return null;
-  const name = str(value.name, 'background').replace(/[\u0000-\u001f\\{}]/g, '').trim().slice(0, 120);
+  const name = str(value.name, fallbackName)
+    .replace(/[\u0000-\u001f\\{}]/g, '')
+    .trim()
+    .slice(0, 120);
   const id = str(value.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || fallbackId;
   const opacity =
     typeof value.opacity === 'number' && Number.isFinite(value.opacity)
@@ -197,6 +204,10 @@ function validBackground(value: unknown, fallbackId: string): BackgroundImageSet
     typeof value.offsetY === 'number' && Number.isFinite(value.offsetY)
       ? Math.round(Math.max(-50, Math.min(50, value.offsetY)))
       : 0;
+  const rotation =
+    typeof value.rotation === 'number' && Number.isFinite(value.rotation)
+      ? Math.round(Math.max(-180, Math.min(180, value.rotation)))
+      : 0;
   const mode =
     value.mode === 'fit' || value.mode === 'stretch' || value.mode === 'scale'
       ? value.mode
@@ -207,23 +218,29 @@ function validBackground(value: unknown, fallbackId: string): BackgroundImageSet
   return {
     id,
     src,
-    name: name || 'background',
+    name: name || fallbackName,
     opacity,
     mode,
     scale,
     position,
     offsetX: offset,
     offsetY: vertical,
+    rotation,
   };
 }
 
 /** Accepts the legacy single-image slot as well as the current layer list. */
-function validBackgroundList(value: unknown, slot: string): BackgroundImageSettings[] {
+function validBackgroundList(
+  value: unknown,
+  slot: string,
+  prefix: string,
+  fallbackName: string,
+): BackgroundImageSettings[] {
   const entries = Array.isArray(value) ? value : isObject(value) ? [value] : [];
   const layers: BackgroundImageSettings[] = [];
   const used = new Set<string>();
   entries.forEach((entry, index) => {
-    const layer = validBackground(entry, `bg-${slot}-${index}`);
+    const layer = validBackground(entry, `${prefix}-${slot}-${index}`, fallbackName);
     if (!layer) return;
     let id = layer.id;
     let suffix = 2;
@@ -234,12 +251,16 @@ function validBackgroundList(value: unknown, slot: string): BackgroundImageSetti
   return layers;
 }
 
-function validBackgrounds(value: unknown): SlideBackgrounds {
+function validImageStacks(
+  value: unknown,
+  prefix: 'bg' | 'fg',
+  fallbackName: string,
+): SlideImageStacks {
   const raw = isObject(value) ? value : {};
   return {
-    all: validBackgroundList(raw.all, 'all'),
-    title: validBackgroundList(raw.title, 'title'),
-    section: validBackgroundList(raw.section, 'section'),
+    all: validBackgroundList(raw.all, 'all', prefix, fallbackName),
+    title: validBackgroundList(raw.title, 'title', prefix, fallbackName),
+    section: validBackgroundList(raw.section, 'section', prefix, fallbackName),
   };
 }
 
@@ -302,7 +323,8 @@ function validTheme(value: unknown): ThemeSettings {
     custom: validCustom(raw.custom),
     fontFamily: validFontId(raw.fontFamily),
     customFont: sanitizeFontName(raw.customFont),
-    backgrounds: validBackgrounds(raw.backgrounds),
+    backgrounds: validImageStacks(raw.backgrounds, 'bg', 'background'),
+    foregrounds: validImageStacks(raw.foregrounds, 'fg', 'foreground'),
     fontScale:
       typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)
         ? Math.max(0.8, Math.min(1.3, raw.fontScale))

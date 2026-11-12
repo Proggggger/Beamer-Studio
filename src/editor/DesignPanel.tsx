@@ -7,13 +7,14 @@ import type {
   FontId,
   FontSizePt,
   LanguageId,
-  SlideBackgrounds,
+  SlideImageStacks,
 } from '../model/types';
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
 import {
   BACKGROUND_MODES,
   BACKGROUND_POSITIONS,
   EMPTY_BACKGROUNDS,
+  EMPTY_FOREGROUNDS,
   newBackground,
 } from '../themes/backgrounds';
 import { TRANSPARENT } from '../themes/colorMath';
@@ -79,7 +80,7 @@ function TemplateGallery() {
             title={`${name} · ${spec.outer} outer · ${spec.inner} inner`}
           >
             <ScaledSlide
-              deck={{ version: 1, meta: { title: 'Title', subtitle: 'Subtitle', author: '', institute: '', date: '' }, aspect, theme: { ...theme, template: name, custom: { enabled: false }, backgrounds: { ...EMPTY_BACKGROUNDS } }, document, slides: [GALLERY_SLIDE] }}
+              deck={{ version: 1, meta: { title: 'Title', subtitle: 'Subtitle', author: '', institute: '', date: '' }, aspect, theme: { ...theme, template: name, custom: { enabled: false }, backgrounds: { ...EMPTY_BACKGROUNDS }, foregrounds: { ...EMPTY_FOREGROUNDS } }, document, slides: [GALLERY_SLIDE] }}
               slide={GALLERY_SLIDE}
               slideIndex={0}
               theme={resolved}
@@ -113,6 +114,7 @@ function ColorGallery() {
           colorTheme: name,
           custom: { enabled: false },
           backgrounds: { ...EMPTY_BACKGROUNDS },
+          foregrounds: { ...EMPTY_FOREGROUNDS },
         };
         return {
           name,
@@ -450,41 +452,34 @@ function LayoutSettings() {
   );
 }
 
-const BACKGROUND_SLOTS: Array<{
-  slot: keyof SlideBackgrounds;
+const IMAGE_SLOTS: Array<{
+  slot: keyof SlideImageStacks;
   title: string;
-  hint: string;
 }> = [
-  {
-    slot: 'all',
-    title: 'All frames',
-    hint: 'Drawn behind every slide unless the title or section page overrides it.',
-  },
-  {
-    slot: 'title',
-    title: 'Title page',
-    hint: 'Adds a dedicated image for the title page, or reuse the shared one.',
-  },
-  {
-    slot: 'section',
-    title: 'Section pages',
-    hint: 'Adds a dedicated image for section pages, or reuse the shared one.',
-  },
+  { slot: 'all', title: 'All frames' },
+  { slot: 'title', title: 'Title page' },
+  { slot: 'section', title: 'Section pages' },
 ];
 
-function BackgroundCard({
+function ImageStackCard({
   slot,
   title,
   hint,
   layers,
   inherited,
+  emptyLabel,
+  inheritedLabel,
+  prefix,
   onChange,
 }: {
-  slot: keyof SlideBackgrounds;
+  slot: keyof SlideImageStacks;
   title: string;
   hint: string;
   layers: BackgroundImageSettings[];
   inherited: boolean;
+  emptyLabel: string;
+  inheritedLabel: string;
+  prefix: 'bg' | 'fg';
   onChange: (layers: BackgroundImageSettings[]) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -497,7 +492,7 @@ function BackgroundCard({
     setBusy(true);
     try {
       const result = await readImageFile(file);
-      const layer = newBackground(result.src, result.name);
+      const layer = newBackground(result.src, result.name, prefix);
       setSelectedId(layer.id);
       onChange([...layers, layer]);
     } catch (error) {
@@ -554,6 +549,7 @@ function BackgroundCard({
                   </span>
                   <span className="bg-layer-meta">
                     {positionLabel(layer.position)} · {modeLabel(layer.mode)} · {layer.opacity}%
+                    {layer.rotation !== 0 ? ` · ${layer.rotation}°` : ''}
                   </span>
                 </div>
                 <div className="bg-layer-actions" onClick={(event) => event.stopPropagation()}>
@@ -581,7 +577,8 @@ function BackgroundCard({
             ))}
           </div>
           <p className="panel-hint bg-stack-hint">
-            Layers draw in order; the last image sits on top. Offsets are a percentage of the page.
+            Layers draw in order; the last image sits on top. Offsets are a percentage of the page,
+            and rotation turns each layer around its anchor.
           </p>
           {selected ? (
             <>
@@ -655,6 +652,16 @@ function BackgroundCard({
                   onChange={(event) => update({ offsetY: Number(event.target.value) })}
                 />
               </Field>
+              <Field label={`Rotation · ${selected.rotation}°`}>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={5}
+                  value={selected.rotation}
+                  onChange={(event) => update({ rotation: Number(event.target.value) })}
+                />
+              </Field>
             </>
           ) : null}
           <div className="bg-row">
@@ -671,7 +678,7 @@ function BackgroundCard({
       ) : (
         <>
           <p className="panel-hint">
-            {inherited ? 'No override — using the shared background stack.' : 'No background image.'}
+            {inherited ? inheritedLabel : emptyLabel}
           </p>
           <div className="bg-row">
             <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
@@ -695,32 +702,44 @@ function BackgroundCard({
   );
 }
 
-function BackgroundsPanel() {
+function ImageStacksPanel({ surface }: { surface: 'background' | 'foreground' }) {
   const theme = useDeckStore((state) => state.deck.theme);
   const updateTheme = useDeckStore((state) => state.updateTheme);
-  const backgrounds = theme.backgrounds;
+  const isBackground = surface === 'background';
+  const stacks = isBackground ? theme.backgrounds : theme.foregrounds;
+  const noun = isBackground ? 'background' : 'foreground';
+  const placement = isBackground ? 'behind' : 'above';
 
   return (
     <>
       <p className="panel-hint bg-intro">
-        Backgrounds sit behind the slide content in the preview and the XeLaTeX export. Each slot is
-        a stack: add several images (a backdrop and a logo, for example) and later layers draw on
-        top. Title and section pages can override the shared stack.
+        {isBackground
+          ? 'Backgrounds sit behind the slide content in the preview and the XeLaTeX export.'
+          : 'Foregrounds sit above the slide content and can cover it — useful for logos, watermarks and decorative marks.'}{' '}
+        Each slot is a stack: add several images (a backdrop and a logo, for example) and later
+        layers draw on top. Title and section pages can override the shared stack.
       </p>
-      {BACKGROUND_SLOTS.map(({ slot, title, hint }) => (
-        <BackgroundCard
+      {IMAGE_SLOTS.map(({ slot, title }) => (
+        <ImageStackCard
           key={slot}
           slot={slot}
           title={title}
-          hint={hint}
-          layers={backgrounds[slot]}
-          inherited={
-            slot !== 'all' && backgrounds[slot].length === 0 && backgrounds.all.length > 0
+          hint={
+            slot === 'all'
+              ? `Drawn ${placement} every slide unless the title or section page overrides it.`
+              : `Adds a dedicated ${noun} stack for these pages, or reuses the shared one.`
           }
+          layers={stacks[slot]}
+          inherited={slot !== 'all' && stacks[slot].length === 0 && stacks.all.length > 0}
+          emptyLabel={`No ${noun} image.`}
+          inheritedLabel={`No override — using the shared ${noun} stack.`}
+          prefix={isBackground ? 'bg' : 'fg'}
           onChange={(layers) =>
             updateTheme(
-              { backgrounds: { ...backgrounds, [slot]: layers } },
-              `background:${slot}`,
+              isBackground
+                ? { backgrounds: { ...stacks, [slot]: layers } }
+                : { foregrounds: { ...stacks, [slot]: layers } },
+              `${surface}:${slot}`,
             )
           }
         />
@@ -763,11 +782,19 @@ export function DesignPanel() {
         >
           Background
         </button>
+        <button
+          type="button"
+          className={designTab === 'foreground' ? 'is-active' : ''}
+          onClick={() => setDesignTab('foreground')}
+        >
+          Foreground
+        </button>
       </div>
       {designTab === 'template' ? <TemplateGallery /> : null}
       {designTab === 'colors' ? <ColorGallery /> : null}
       {designTab === 'layout' ? <LayoutSettings /> : null}
-      {designTab === 'background' ? <BackgroundsPanel /> : null}
+      {designTab === 'background' ? <ImageStacksPanel surface="background" /> : null}
+      {designTab === 'foreground' ? <ImageStacksPanel surface="foreground" /> : null}
     </div>
   );
 }

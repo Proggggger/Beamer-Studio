@@ -34,7 +34,7 @@ import type {
 } from './types';
 
 export type RightTab = 'design' | 'edit';
-export type DesignTab = 'template' | 'colors' | 'layout' | 'background';
+export type DesignTab = 'template' | 'colors' | 'layout' | 'background' | 'foreground';
 
 export const HISTORY_LIMIT = 120;
 const COALESCE_MS = 600;

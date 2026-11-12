@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { BackgroundImageSettings } from '../model/types';
 import {
   backgroundPlacementCss,
+  backgroundRotationOrigin,
   backgroundSizeCss,
   backgroundSlotFor,
   EMPTY_BACKGROUNDS,
+  EMPTY_FOREGROUNDS,
   newBackground,
-  resolveSlideBackground,
+  resolveSlideLayers,
 } from './backgrounds';
 
 const image: BackgroundImageSettings = {
@@ -19,47 +21,48 @@ const image: BackgroundImageSettings = {
   position: 'center',
   offsetX: 0,
   offsetY: 0,
+  rotation: 0,
 };
 
-describe('resolveSlideBackground', () => {
+describe('resolveSlideLayers', () => {
   it('returns null when nothing is configured', () => {
-    expect(resolveSlideBackground(EMPTY_BACKGROUNDS, 'frame')).toBeNull();
-    expect(resolveSlideBackground(EMPTY_BACKGROUNDS, 'title')).toBeNull();
+    expect(resolveSlideLayers(EMPTY_BACKGROUNDS, 'frame')).toBeNull();
+    expect(resolveSlideLayers(EMPTY_BACKGROUNDS, 'title')).toBeNull();
   });
 
   it('applies the shared stack to every slide kind', () => {
     const backgrounds = { ...EMPTY_BACKGROUNDS, all: [image] };
-    expect(resolveSlideBackground(backgrounds, 'frame')?.slot).toBe('all');
-    expect(resolveSlideBackground(backgrounds, 'title')?.slot).toBe('all');
-    expect(resolveSlideBackground(backgrounds, 'section')?.slot).toBe('all');
-    expect(resolveSlideBackground(backgrounds, 'frame')?.layers).toEqual([image]);
+    expect(resolveSlideLayers(backgrounds, 'frame')?.slot).toBe('all');
+    expect(resolveSlideLayers(backgrounds, 'title')?.slot).toBe('all');
+    expect(resolveSlideLayers(backgrounds, 'section')?.slot).toBe('all');
+    expect(resolveSlideLayers(backgrounds, 'frame')?.layers).toEqual([image]);
   });
 
   it('prefers dedicated title and section stacks', () => {
     const title = { ...image, id: 't1', name: 'title.png' };
     const section = { ...image, id: 's1', name: 'section.png' };
     const backgrounds = { ...EMPTY_BACKGROUNDS, all: [image], title: [title], section: [section] };
-    expect(resolveSlideBackground(backgrounds, 'title')).toEqual({
+    expect(resolveSlideLayers(backgrounds, 'title')).toEqual({
       slot: 'title',
       layers: [title],
     });
-    expect(resolveSlideBackground(backgrounds, 'section')).toEqual({
+    expect(resolveSlideLayers(backgrounds, 'section')).toEqual({
       slot: 'section',
       layers: [section],
     });
-    expect(resolveSlideBackground(backgrounds, 'frame')?.slot).toBe('all');
+    expect(resolveSlideLayers(backgrounds, 'frame')?.slot).toBe('all');
   });
 
   it('keeps dedicated stacks when no shared one exists', () => {
     const backgrounds = { ...EMPTY_BACKGROUNDS, title: [image] };
-    expect(resolveSlideBackground(backgrounds, 'title')?.slot).toBe('title');
-    expect(resolveSlideBackground(backgrounds, 'frame')).toBeNull();
+    expect(resolveSlideLayers(backgrounds, 'title')?.slot).toBe('title');
+    expect(resolveSlideLayers(backgrounds, 'frame')).toBeNull();
   });
 
   it('keeps the whole stack in order', () => {
     const logo = { ...image, id: 'bg-2', name: 'logo.png', scale: 20 };
     const backgrounds = { ...EMPTY_BACKGROUNDS, all: [image, logo] };
-    expect(resolveSlideBackground(backgrounds, 'frame')?.layers.map((layer) => layer.id)).toEqual([
+    expect(resolveSlideLayers(backgrounds, 'frame')?.layers.map((layer) => layer.id)).toEqual([
       'bg-1',
       'bg-2',
     ]);
@@ -92,6 +95,24 @@ describe('background CSS mapping', () => {
     expect(backgroundSizeCss({ ...image, mode: 'fit' })).toBe('contain');
     expect(backgroundSizeCss({ ...image, mode: 'scale', scale: 65 })).toBe('65% auto');
   });
+
+  it('rotates around the anchored point including offsets', () => {
+    const placed: BackgroundImageSettings = {
+      ...image,
+      position: 'top-right',
+      offsetX: -10,
+      offsetY: 20,
+    };
+    expect(backgroundRotationOrigin(placed, 960, 540)).toBe('864.0px 108.0px');
+  });
+});
+
+describe('foreground stacks', () => {
+  it('share the slot resolution rules', () => {
+    expect(resolveSlideLayers(EMPTY_FOREGROUNDS, 'frame')).toBeNull();
+    const stacks = { ...EMPTY_FOREGROUNDS, all: [image] };
+    expect(resolveSlideLayers(stacks, 'section')?.layers).toEqual([image]);
+  });
 });
 
 describe('background helpers', () => {
@@ -105,8 +126,10 @@ describe('background helpers', () => {
       position: 'center',
       offsetX: 0,
       offsetY: 0,
+      rotation: 0,
     });
     expect(newBackground('data:image/png;base64,AAAA', 'photo.png').id).toMatch(/^bg_/);
+    expect(newBackground('data:image/png;base64,AAAA', 'logo.png', 'fg').id).toMatch(/^fg_/);
   });
 
   it('routes slide kinds to slots', () => {

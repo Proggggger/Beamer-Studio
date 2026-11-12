@@ -531,7 +531,8 @@ button:disabled {
   background: transparent;
   color: var(--ui-muted);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .panel-tabs button.is-active {
@@ -1318,14 +1319,23 @@ button:disabled {
   background: var(--bg);
 }
 
-.bx-slide-bg {
+.bx-slide-bg,
+.bx-slide-fg {
   position: absolute;
   inset: 0;
-  z-index: 0;
   pointer-events: none;
 }
 
-.bx-slide-bg-layer {
+.bx-slide-bg {
+  z-index: 0;
+}
+
+.bx-slide-fg {
+  z-index: 10;
+}
+
+.bx-slide-bg-layer,
+.bx-slide-fg-layer {
   position: absolute;
   inset: 0;
   background-repeat: no-repeat;

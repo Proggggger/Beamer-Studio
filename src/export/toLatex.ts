@@ -12,7 +12,7 @@ import type {
 import { themeSpec } from '../themes/beamerThemes';
 import {
   BACKGROUND_ANCHOR_FRACTIONS,
-  resolveSlideBackground,
+  resolveSlideLayers,
 } from '../themes/backgrounds';
 import { readableOn, shade } from '../themes/colorMath';
 import { resolveFont, scriptFallbackChain } from '../themes/fonts';
@@ -177,6 +177,21 @@ function mm(value: number): string {
   return `${value.toFixed(2)}mm`;
 }
 
+function imageSizeOptions(
+  layer: BackgroundImageSettings,
+  paper: { w: number; h: number },
+): string {
+  if (layer.mode === 'stretch') return 'width=\\paperwidth,height=\\paperheight';
+  if (layer.mode === 'fit') {
+    return 'width=\\paperwidth,height=\\paperheight,keepaspectratio';
+  }
+  return `width=${mm((paper.w * layer.scale) / 100)}`;
+}
+
+function nodeRotation(layer: BackgroundImageSettings): string {
+  return layer.rotation !== 0 ? `,rotate=${-layer.rotation}` : '';
+}
+
 /**
  * Replaces beamer's canvas with a solid fill and the layer stack on top.
  * Uses explicit page coordinates instead of tikz's current page, which would
@@ -199,17 +214,12 @@ function backgroundCanvasCommands(
     const name = names.get(`bg:${slot}:${index}`);
     if (!name) return;
     const anchor = BACKGROUND_ANCHOR_FRACTIONS[layer.position];
-    const size =
-      layer.mode === 'stretch'
-        ? 'width=\\paperwidth,height=\\paperheight'
-        : layer.mode === 'fit'
-          ? 'width=\\paperwidth,height=\\paperheight,keepaspectratio'
-          : `width=${mm(((paper.w * layer.scale) / 100))}`;
+    const size = imageSizeOptions(layer, paper);
     const x = paper.w * (anchor.x + layer.offsetX / 100);
     // Positive vertical offsets move down on screen, so they subtract from tikz's y.
     const y = paper.h * (1 - anchor.y - layer.offsetY / 100);
     commands.push(
-      `    \\node[anchor=${BACKGROUND_NODE_ANCHORS[layer.position]},inner sep=0pt,opacity=${(layer.opacity / 100).toFixed(2)}] at (${mm(x)},${mm(y)}) {\\includegraphics[${size}]{${name}}};`,
+      `    \\node[anchor=${BACKGROUND_NODE_ANCHORS[layer.position]},inner sep=0pt,opacity=${(layer.opacity / 100).toFixed(2)}${nodeRotation(layer)}] at (${mm(x)},${mm(y)}) {\\includegraphics[${size}]{${name}}};`,
     );
   });
   commands.push('  \\end{tikzpicture}%', '}');
@@ -226,6 +236,33 @@ function backgroundFillCommands(paper: { w: number; h: number }): string[] {
     '  \\end{tikzpicture}%',
     '}',
   ];
+}
+
+/**
+ * Foreground layers hang off `current page` anchors in a shipout hook, so a
+ * fresh compile needs a second XeLaTeX run to resolve them.
+ */
+function foregroundNodeCommands(
+  layers: BackgroundImageSettings[],
+  names: Map<string, string>,
+  slot: string,
+  paper: { w: number; h: number },
+): string[] {
+  const commands = ['\\renewcommand{\\bxForeground}{%'];
+  layers.forEach((layer, index) => {
+    const name = names.get(`fg:${slot}:${index}`);
+    if (!name) return;
+    const anchor = BACKGROUND_ANCHOR_FRACTIONS[layer.position];
+    const size = imageSizeOptions(layer, paper);
+    const x = paper.w * (anchor.x + layer.offsetX / 100);
+    const y = paper.h * (anchor.y + layer.offsetY / 100);
+    const shift = `[xshift=${mm(x)},yshift=${mm(y === 0 ? 0 : -y)}]current page.north west`;
+    commands.push(
+      `  \\node[anchor=${BACKGROUND_NODE_ANCHORS[layer.position]},inner sep=0pt,opacity=${(layer.opacity / 100).toFixed(2)}${nodeRotation(layer)}] at (${shift}) {\\includegraphics[${size}]{${name}}};%`,
+    );
+  });
+  commands.push('}');
+  return commands;
 }
 
 export interface LatexImage {
@@ -266,6 +303,12 @@ export function collectImages(deck: Deck): LatexImage[] {
   for (const slot of ['all', 'title', 'section'] as const) {
     backgrounds[slot].forEach((layer, index) => {
       if (layer.src) add(`bg:${slot}:${index}`, layer.name || 'background', layer.src);
+    });
+  }
+  const foregrounds = deck.theme.foregrounds;
+  for (const slot of ['all', 'title', 'section'] as const) {
+    foregrounds[slot].forEach((layer, index) => {
+      if (layer.src) add(`fg:${slot}:${index}`, layer.name || 'foreground', layer.src);
     });
   }
   return images;
@@ -487,6 +530,9 @@ export function toLatex(deck: Deck): string {
   const hasBackgrounds = (['all', 'title', 'section'] as const).some(
     (slot) => theme.backgrounds[slot].length > 0,
   );
+  const hasForegrounds = (['all', 'title', 'section'] as const).some(
+    (slot) => theme.foregrounds[slot].length > 0,
+  );
 
   lines.push('% !TeX program = xelatex');
   if (deck.aspect === '169') {
@@ -510,7 +556,7 @@ export function toLatex(deck: Deck): string {
 
   lines.push('\\usepackage{fontspec}');
   lines.push('\\usepackage{polyglossia}');
-  if (hasBackgrounds) lines.push('\\usepackage{tikz}');
+  if (hasBackgrounds || hasForegrounds) lines.push('\\usepackage{tikz}');
   lines.push(`\\setmainlanguage{${languageOption(settings.mainLanguage).tex}}`);
   for (const id of settings.otherLanguages) {
     lines.push(`\\setotherlanguage{${languageOption(id).tex}}`);
@@ -613,6 +659,16 @@ export function toLatex(deck: Deck): string {
     );
   }
 
+  if (hasForegrounds) {
+    lines.push('% Foreground overlays are page-anchored: run XeLaTeX twice.');
+    lines.push('\\newcommand{\\bxForeground}{}');
+    lines.push('\\AddToHook{shipout/foreground}{%');
+    lines.push('  \\begin{tikzpicture}[remember picture,overlay]');
+    lines.push('    \\bxForeground');
+    lines.push('  \\end{tikzpicture}%');
+    lines.push('}');
+  }
+
   if (theme.bulletShape !== 'theme') {
     const bullets = BULLET_TEMPLATES[theme.bulletShape];
     lines.push(`\\setbeamertemplate{itemize item}{${bullets.item}}`);
@@ -653,9 +709,23 @@ export function toLatex(deck: Deck): string {
   const imageNames = new Map(images.map((image) => [image.key, image.name]));
   const paper = paperMillimetres(deck.aspect);
   let appliedBackground = 'none';
+  let appliedForeground = 'none';
   for (const slide of deck.slides) {
+    if (hasForegrounds) {
+      const foreground = resolveSlideLayers(theme.foregrounds, slide.kind);
+      const key = foreground ? `fg:${foreground.slot}` : 'none';
+      if (key !== appliedForeground) {
+        lines.push(
+          ...(foreground
+            ? foregroundNodeCommands(foreground.layers, imageNames, foreground.slot, paper)
+            : ['\\renewcommand{\\bxForeground}{}']),
+        );
+        lines.push('');
+        appliedForeground = key;
+      }
+    }
     if (hasBackgrounds) {
-      const background = resolveSlideBackground(theme.backgrounds, slide.kind);
+      const background = resolveSlideLayers(theme.backgrounds, slide.kind);
       const key = background ? `bg:${background.slot}` : 'fill';
       if (key !== appliedBackground) {
         lines.push(

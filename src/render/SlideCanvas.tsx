@@ -1,11 +1,12 @@
 import type { CSSProperties } from 'react';
 import { useDeckStore } from '../model/store';
-import type { Deck, Slide } from '../model/types';
+import type { BackgroundImageSettings, Deck, Slide } from '../model/types';
 import type { ResolvedTheme } from '../themes/resolve';
 import {
   backgroundPlacementCss,
+  backgroundRotationOrigin,
   backgroundSizeCss,
-  resolveSlideBackground,
+  resolveSlideLayers,
 } from '../themes/backgrounds';
 import { mix, TRANSPARENT } from '../themes/colorMath';
 import { BlockList } from './BlockView';
@@ -207,6 +208,37 @@ function FramePage({
   );
 }
 
+function ImageLayers({
+  layers,
+  className,
+  pageWidth,
+  pageHeight,
+}: {
+  layers: BackgroundImageSettings[];
+  className: string;
+  pageWidth: number;
+  pageHeight: number;
+}) {
+  return (
+    <div className={className} aria-hidden>
+      {layers.map((layer) => (
+        <div
+          key={layer.id}
+          className={`${className}-layer`}
+          style={{
+            backgroundImage: `url("${layer.src}")`,
+            backgroundSize: backgroundSizeCss(layer),
+            backgroundPosition: backgroundPlacementCss(layer, pageWidth, pageHeight),
+            opacity: layer.opacity / 100,
+            transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
+            transformOrigin: backgroundRotationOrigin(layer, pageWidth, pageHeight),
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function SlideCanvas({
   deck,
   slide,
@@ -216,7 +248,8 @@ export function SlideCanvas({
   selectedBlockId = null,
   selectedItemId = null,
 }: SlideCanvasProps) {
-  const background = resolveSlideBackground(deck.theme.backgrounds, slide.kind);
+  const background = resolveSlideLayers(deck.theme.backgrounds, slide.kind);
+  const foreground = resolveSlideLayers(deck.theme.foregrounds, slide.kind);
   return (
     <div
       className={`bx-page bx-kind-${slide.kind}${background ? ' has-background' : ''}`}
@@ -225,20 +258,12 @@ export function SlideCanvas({
       data-template={theme.spec.name}
     >
       {background ? (
-        <div className="bx-slide-bg" aria-hidden>
-          {background.layers.map((layer) => (
-            <div
-              key={layer.id}
-              className="bx-slide-bg-layer"
-              style={{
-                backgroundImage: `url("${layer.src}")`,
-                backgroundSize: backgroundSizeCss(layer),
-                backgroundPosition: backgroundPlacementCss(layer, theme.page.w, theme.page.h),
-                opacity: layer.opacity / 100,
-              }}
-            />
-          ))}
-        </div>
+        <ImageLayers
+          layers={background.layers}
+          className="bx-slide-bg"
+          pageWidth={theme.page.w}
+          pageHeight={theme.page.h}
+        />
       ) : null}
       {slide.kind === 'title' ? (
         <TitlePage deck={deck} theme={theme} editable={editable} />
@@ -261,6 +286,14 @@ export function SlideCanvas({
           selectedItemId={selectedItemId}
         />
       )}
+      {foreground ? (
+        <ImageLayers
+          layers={foreground.layers}
+          className="bx-slide-fg"
+          pageWidth={theme.page.w}
+          pageHeight={theme.page.h}
+        />
+      ) : null}
     </div>
   );
 }

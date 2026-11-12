@@ -583,6 +583,7 @@ describe('slide backgrounds', () => {
     position: 'top-right' as const,
     offsetX: 0,
     offsetY: 0,
+    rotation: 0,
   };
   const empty = { all: [], title: [], section: [] };
   const title: Slide = { id: 't', kind: 'title', title: '', layout: 'normal', body: [] };
@@ -623,6 +624,13 @@ describe('slide backgrounds', () => {
     );
     expect(tex.indexOf('backdrop.png')).toBeLessThan(tex.indexOf('logo.png'));
     expect(tex.match(/\\usebackgroundtemplate/g)).toHaveLength(1);
+  });
+
+  it('rotates background layers around their anchor', () => {
+    const tex = toLatex(backgroundsDeck({ ...empty, all: [{ ...layer, rotation: 15 }] }));
+    expect(tex).toContain(
+      '\\node[anchor=north east,inner sep=0pt,opacity=0.40,rotate=-15] at (160.00mm,90.00mm) {\\includegraphics[width=80.00mm]{backdrop.png}};',
+    );
   });
 
   it('supports fit and stretch sizing', () => {
@@ -669,6 +677,98 @@ describe('slide backgrounds', () => {
       ['bg:all:0', 'backdrop.png'],
       ['bg:all:1', 'logo.png'],
       ['bg:title:0', 'title-bg.png'],
+    ]);
+  });
+});
+
+describe('slide foregrounds', () => {
+  const src = 'data:image/png;base64,AAAA';
+  const layer = {
+    id: 'fg-1',
+    src,
+    name: 'seal.png',
+    opacity: 40,
+    mode: 'scale' as const,
+    scale: 50,
+    position: 'top-right' as const,
+    offsetX: 0,
+    offsetY: 0,
+    rotation: 0,
+  };
+  const empty = { all: [], title: [], section: [] };
+
+  function foregroundsDeck(
+    foregrounds: Deck['theme']['foregrounds'],
+    slides: Slide[] = [frame([], { title: 'Body' })],
+  ) {
+    return deck({ theme: { ...DEFAULT_THEME, foregrounds }, slides });
+  }
+
+  it('emits a page-anchored shipout hook and the node stack', () => {
+    const tex = toLatex(foregroundsDeck({ ...empty, all: [layer] }));
+    expect(tex).toContain('\\usepackage{tikz}');
+    expect(tex).toContain('\\newcommand{\\bxForeground}{}');
+    expect(tex).toContain('\\AddToHook{shipout/foreground}{%');
+    expect(tex).toContain('\\begin{tikzpicture}[remember picture,overlay]');
+    expect(tex).toContain('\\renewcommand{\\bxForeground}{%');
+    expect(tex).toContain(
+      '\\node[anchor=north east,inner sep=0pt,opacity=0.40] at ([xshift=160.00mm,yshift=0.00mm]current page.north west) {\\includegraphics[width=80.00mm]{seal.png}};%',
+    );
+  });
+
+  it('applies manual offsets and rotates clockwise in tikz terms', () => {
+    const tex = toLatex(
+      foregroundsDeck({
+        ...empty,
+        all: [{ ...layer, position: 'bottom-left', offsetX: -5, offsetY: 10, rotation: 30 }],
+      }),
+    );
+    expect(tex).toContain(
+      '\\node[anchor=south west,inner sep=0pt,opacity=0.40,rotate=-30] at ([xshift=-8.00mm,yshift=-99.00mm]current page.north west) {\\includegraphics[width=80.00mm]{seal.png}};%',
+    );
+  });
+
+  it('supports fit and stretch sizing above the content', () => {
+    const fit = toLatex(foregroundsDeck({ ...empty, all: [{ ...layer, mode: 'fit' }] }));
+    expect(fit).toContain('\\includegraphics[width=\\paperwidth,height=\\paperheight,keepaspectratio]{seal.png}');
+    const stretch = toLatex(foregroundsDeck({ ...empty, all: [{ ...layer, mode: 'stretch' }] }));
+    expect(stretch).toContain('\\includegraphics[width=\\paperwidth,height=\\paperheight]{seal.png}');
+  });
+
+  it('switches overlays per slide and clears them when a page has none', () => {
+    const tex = toLatex(
+      foregroundsDeck(
+        { ...empty, title: [{ ...layer, name: 'cover.png' }] },
+        [
+          { id: 't', kind: 'title', title: '', layout: 'normal', body: [] },
+          frame([], { title: 'Body' }),
+        ],
+      ),
+    );
+    expect(tex).toContain('{cover.png}');
+    expect(tex).not.toContain('{seal.png}');
+    const cleared = tex.lastIndexOf('\\renewcommand{\\bxForeground}{}');
+    expect(cleared).toBeGreaterThan(tex.indexOf('{cover.png}'));
+  });
+
+  it('renders no foreground machinery when no image is set', () => {
+    const tex = toLatex(deck());
+    expect(tex).not.toContain('\\AddToHook{shipout/foreground}');
+    expect(tex).not.toContain('\\bxForeground');
+  });
+
+  it('collects foreground layers with stable keys', () => {
+    const images = collectImages(
+      foregroundsDeck({
+        ...empty,
+        all: [layer, { ...layer, id: 'fg-2', name: 'badge.png' }],
+        section: [{ ...layer, id: 'fg-s', name: 'part.png' }],
+      }),
+    );
+    expect(images.map((entry) => [entry.key, entry.name])).toEqual([
+      ['fg:all:0', 'seal.png'],
+      ['fg:all:1', 'badge.png'],
+      ['fg:section:0', 'part.png'],
     ]);
   });
 });

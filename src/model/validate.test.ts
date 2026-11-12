@@ -125,6 +125,11 @@ describe('parseDeck backgrounds', () => {
       title: [],
       section: [],
     });
+    expect(parseDeck(createEmptyDeck())?.theme.foregrounds).toEqual({
+      all: [],
+      title: [],
+      section: [],
+    });
   });
 
   it('migrates a legacy single image into a one-layer stack', () => {
@@ -151,6 +156,7 @@ describe('parseDeck backgrounds', () => {
         position: 'bottom-right',
         offsetX: 0,
         offsetY: 0,
+        rotation: 0,
       },
     ]);
     expect(parsed?.theme.backgrounds.title).toEqual([]);
@@ -188,6 +194,7 @@ describe('parseDeck backgrounds', () => {
         position: 'center',
         offsetX: 0,
         offsetY: 0,
+        rotation: 0,
       },
     ]);
   });
@@ -201,6 +208,65 @@ describe('parseDeck backgrounds', () => {
     );
     expect(parsed?.theme.backgrounds.all).toEqual([]);
     expect(parsed?.theme.backgrounds.title).toEqual([]);
+  });
+});
+
+describe('parseDeck foregrounds', () => {
+  function withForegrounds(foregrounds: unknown): unknown {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as Record<string, unknown>;
+    raw.theme = { ...(raw.theme as object), foregrounds };
+    return raw;
+  }
+
+  const src = 'data:image/png;base64,BBBB';
+
+  it('fills empty foreground slots when the theme has no stack', () => {
+    expect(parseDeck(withForegrounds(undefined))?.theme.foregrounds).toEqual({
+      all: [],
+      title: [],
+      section: [],
+    });
+  });
+
+  it('migrates a legacy single foreground image and prefixes its id', () => {
+    const parsed = parseDeck(withForegrounds({ all: { src, name: 'seal.png', rotation: 45 } }));
+    expect(parsed?.theme.foregrounds.all).toEqual([
+      {
+        id: 'fg-all-0',
+        src,
+        name: 'seal.png',
+        opacity: 100,
+        scale: 100,
+        mode: 'scale',
+        position: 'center',
+        offsetX: 0,
+        offsetY: 0,
+        rotation: 45,
+      },
+    ]);
+    expect(parsed?.theme.foregrounds.section).toEqual([]);
+  });
+
+  it('clamps rotation to -180..180 and rounds to whole degrees', () => {
+    const parsed = parseDeck(
+      withForegrounds({
+        title: [
+          { src, name: 'a.png', rotation: 240 },
+          { src, name: 'b.png', rotation: -181.4 },
+          { src, name: 'c.png', rotation: 12.6 },
+        ],
+      }),
+    );
+    const layers = parsed?.theme.foregrounds.title ?? [];
+    expect(layers.map((layer) => layer.rotation)).toEqual([180, -180, 13]);
+    expect(layers.map((layer) => layer.id)).toEqual(['fg-title-0', 'fg-title-1', 'fg-title-2']);
+  });
+
+  it('ignores foregrounds that are not embedded data URLs', () => {
+    const parsed = parseDeck(
+      withForegrounds({ section: [{ src: 'https://example.com/logo.png', name: 'remote' }] }),
+    );
+    expect(parsed?.theme.foregrounds.section).toEqual([]);
   });
 });
 

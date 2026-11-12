@@ -161,13 +161,16 @@ export interface BackgroundImageSettings {
   /** Fine placement offset from the anchor, in percent of the page. */
   offsetX: number;
   offsetY: number;
+  /** Clockwise rotation in degrees around the anchor, -180 to 180. */
+  rotation: number;
 }
 
 /**
- * Ordered image stacks drawn back to front. Empty title/section lists inherit
- * the shared stack; on 'all' an empty list means no background.
+ * Ordered image stacks drawn back to front, used for both background and
+ * foreground layers. Empty title/section lists inherit the shared stack; on
+ * 'all' an empty list means no layer.
  */
-export interface SlideBackgrounds {
+export interface SlideImageStacks {
   all: BackgroundImageSettings[];
   title: BackgroundImageSettings[];
   section: BackgroundImageSettings[];
@@ -190,7 +193,9 @@ export interface ThemeSettings {
   /** family name typed by the user when fontFamily is 'custom' */
   customFont: string;
   /** Background images drawn behind every slide, with optional title/section overrides. */
-  backgrounds: SlideBackgrounds;
+  backgrounds: SlideImageStacks;
+  /** Foreground images drawn above the slide content, with the same slot overrides. */
+  foregrounds: SlideImageStacks;
   fontScale: number;
   bulletShape: 'theme' | BulletShape;
   blockShape: 'theme' | BlockShape;

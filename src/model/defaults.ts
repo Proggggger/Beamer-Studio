@@ -1,5 +1,5 @@
 import { uid } from './ids';
-import { EMPTY_BACKGROUNDS } from '../themes/backgrounds';
+import { EMPTY_BACKGROUNDS, EMPTY_FOREGROUNDS } from '../themes/backgrounds';
 import type { Block, Deck, DeckMeta, DocumentSettings, Slide, ThemeSettings } from './types';
 
 export const DEFAULT_META: DeckMeta = {
@@ -17,6 +17,7 @@ export const DEFAULT_THEME: ThemeSettings = {
   fontFamily: 'latin-modern-sans',
   customFont: '',
   backgrounds: { ...EMPTY_BACKGROUNDS },
+  foregrounds: { ...EMPTY_FOREGROUNDS },
   fontScale: 1,
   bulletShape: 'theme',
   blockShape: 'theme',

@@ -3,11 +3,12 @@ import type {
   BackgroundImageSettings,
   BackgroundPosition,
   BackgroundSizeMode,
-  SlideBackgrounds,
+  SlideImageStacks,
   SlideKind,
 } from '../model/types';
 
-export const EMPTY_BACKGROUNDS: SlideBackgrounds = { all: [], title: [], section: [] };
+export const EMPTY_BACKGROUNDS: SlideImageStacks = { all: [], title: [], section: [] };
+export const EMPTY_FOREGROUNDS: SlideImageStacks = { all: [], title: [], section: [] };
 
 export const BACKGROUND_POSITIONS: Array<{ id: BackgroundPosition; label: string }> = [
   { id: 'top-left', label: 'Top left' },
@@ -43,9 +44,13 @@ export const BACKGROUND_ANCHOR_FRACTIONS: Record<
   'bottom-right': { x: 1, y: 1 },
 };
 
-export function newBackground(src: string, name: string): BackgroundImageSettings {
+export function newBackground(
+  src: string,
+  name: string,
+  prefix: 'bg' | 'fg' = 'bg',
+): BackgroundImageSettings {
   return {
-    id: uid('bg'),
+    id: uid(prefix),
     src,
     name,
     opacity: 100,
@@ -54,29 +59,30 @@ export function newBackground(src: string, name: string): BackgroundImageSetting
     position: 'center',
     offsetX: 0,
     offsetY: 0,
+    rotation: 0,
   };
 }
 
-export interface SlideBackground {
+export interface ResolvedImageStack {
   /** Which slot supplied the stack; title/section fall back to 'all'. */
-  slot: keyof SlideBackgrounds;
+  slot: keyof SlideImageStacks;
   layers: BackgroundImageSettings[];
 }
 
-export function backgroundSlotFor(kind: SlideKind): keyof SlideBackgrounds {
+export function backgroundSlotFor(kind: SlideKind): keyof SlideImageStacks {
   if (kind === 'title') return 'title';
   if (kind === 'section') return 'section';
   return 'all';
 }
 
-export function resolveSlideBackground(
-  backgrounds: SlideBackgrounds,
+export function resolveSlideLayers(
+  stacks: SlideImageStacks,
   kind: SlideKind,
-): SlideBackground | null {
+): ResolvedImageStack | null {
   const slot = backgroundSlotFor(kind);
-  if (backgrounds[slot].length > 0) return { slot, layers: backgrounds[slot] };
-  if (slot !== 'all' && backgrounds.all.length > 0) {
-    return { slot: 'all', layers: backgrounds.all };
+  if (stacks[slot].length > 0) return { slot, layers: stacks[slot] };
+  if (slot !== 'all' && stacks.all.length > 0) {
+    return { slot: 'all', layers: stacks.all };
   }
   return null;
 }
@@ -104,4 +110,16 @@ export function backgroundPlacementCss(
       ? `${percent}%`
       : `calc(${percent}% ${shift > 0 ? '+' : '-'} ${Math.abs(shift).toFixed(1)}px)`;
   return `${axis(anchor.x * 100, shiftX)} ${axis(anchor.y * 100, shiftY)}`;
+}
+
+/** Rotation origin in page pixels, matching the anchored export node. */
+export function backgroundRotationOrigin(
+  image: BackgroundImageSettings,
+  pageWidth: number,
+  pageHeight: number,
+): string {
+  const anchor = BACKGROUND_ANCHOR_FRACTIONS[image.position];
+  const x = (anchor.x + image.offsetX / 100) * pageWidth;
+  const y = (anchor.y + image.offsetY / 100) * pageHeight;
+  return `${x.toFixed(1)}px ${y.toFixed(1)}px`;
 }

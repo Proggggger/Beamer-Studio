@@ -12,6 +12,10 @@ export function ExportDialog() {
   const [copied, setCopied] = useState(false);
   const tex = useMemo(() => toLatex(deck), [deck]);
   const images = useMemo(() => collectImages(deck), [deck]);
+  const hasForegrounds = useMemo(
+    () => images.some((image) => image.key.startsWith('fg:')),
+    [images],
+  );
   const filename = `${slugify(deck.meta.title)}.tex`;
   const font = resolveFont(deck.theme.fontFamily, deck.theme.customFont);
   const mainLanguage = languageOption(deck.document.mainLanguage);
@@ -124,6 +128,12 @@ export function ExportDialog() {
           Compile with <code>xelatex {filename}</code> (the file starts with a{' '}
           <code>% !TeX program = xelatex</code> comment). It uses fontspec and polyglossia, so
           compile it with XeLaTeX rather than pdfLaTeX; the chosen font must be installed.
+          {hasForegrounds ? (
+            <>
+              {' '}
+              Foreground layers are anchored to the page, so run XeLaTeX twice on a fresh compile.
+            </>
+          ) : null}
         </footer>
       </div>
     </div>
