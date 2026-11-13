@@ -13,7 +13,8 @@ export function ExportDialog() {
   const tex = useMemo(() => toLatex(deck), [deck]);
   const images = useMemo(() => collectImages(deck), [deck]);
   const hasForegrounds = useMemo(
-    () => images.some((image) => image.key.startsWith('fg:')),
+    () =>
+      images.some((image) => image.key.startsWith('fg:') || image.key.startsWith('fs:')),
     [images],
   );
   const filename = `${slugify(deck.meta.title)}.tex`;

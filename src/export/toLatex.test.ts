@@ -10,13 +10,23 @@ function deck(patch: Partial<Deck> = {}): Deck {
     aspect: '169',
     theme: { ...DEFAULT_THEME, custom: { ...DEFAULT_THEME.custom } },
     document: { ...DEFAULT_DOCUMENT, otherLanguages: [] },
-    slides: [{ id: 'frame-1', kind: 'frame', title: 'Hello', layout: 'normal', body: [] }],
+    slides: [
+      { id: 'frame-1', kind: 'frame', title: 'Hello', layout: 'normal', body: [], images: [] },
+    ],
     ...patch,
   };
 }
 
 function frame(body: Block[], extra: Partial<Slide> = {}): Slide {
-  return { id: 'frame-1', kind: 'frame', title: 'Frame', layout: 'normal', body, ...extra };
+  return {
+    id: 'frame-1',
+    kind: 'frame',
+    title: 'Frame',
+    layout: 'normal',
+    body,
+    images: [],
+    ...extra,
+  };
 }
 
 describe('latexImageName', () => {
@@ -295,8 +305,8 @@ describe('toLatex slides', () => {
     const tex = toLatex(
       deck({
         slides: [
-          { id: 't', kind: 'title', title: '', layout: 'normal', body: [] },
-          { id: 's', kind: 'section', title: 'Part One', layout: 'normal', body: [] },
+          { id: 't', kind: 'title', title: '', layout: 'normal', body: [], images: [] },
+          { id: 's', kind: 'section', title: 'Part One', layout: 'normal', body: [], images: [] },
         ],
       }),
     );
@@ -586,7 +596,14 @@ describe('slide backgrounds', () => {
     rotation: 0,
   };
   const empty = { all: [], title: [], section: [] };
-  const title: Slide = { id: 't', kind: 'title', title: '', layout: 'normal', body: [] };
+  const title: Slide = {
+    id: 't',
+    kind: 'title',
+    title: '',
+    layout: 'normal',
+    body: [],
+    images: [],
+  };
 
   function backgroundsDeck(backgrounds: Deck['theme']['backgrounds'], slides: Slide[] = [title, frame([], { title: 'Body' })]) {
     return deck({ theme: { ...DEFAULT_THEME, backgrounds }, slides });
@@ -740,7 +757,7 @@ describe('slide foregrounds', () => {
       foregroundsDeck(
         { ...empty, title: [{ ...layer, name: 'cover.png' }] },
         [
-          { id: 't', kind: 'title', title: '', layout: 'normal', body: [] },
+          { id: 't', kind: 'title', title: '', layout: 'normal', body: [], images: [] },
           frame([], { title: 'Body' }),
         ],
       ),
@@ -769,6 +786,74 @@ describe('slide foregrounds', () => {
       ['fg:all:0', 'seal.png'],
       ['fg:all:1', 'badge.png'],
       ['fg:section:0', 'part.png'],
+    ]);
+  });
+});
+
+describe('per-slide image layers', () => {
+  const src = 'data:image/png;base64,DDDD';
+  const layer = {
+    id: 'fs-1',
+    src,
+    name: 'stamp.png',
+    opacity: 60,
+    mode: 'scale' as const,
+    scale: 25,
+    position: 'bottom-right' as const,
+    offsetX: 0,
+    offsetY: 0,
+    rotation: 0,
+  };
+
+  it('emits an overlay for the owning slide only', () => {
+    const tex = toLatex(
+      deck({
+        slides: [
+          frame([], { id: 'one', title: 'One', images: [layer] }),
+          frame([], { id: 'two', title: 'Two' }),
+        ],
+      }),
+    );
+    expect(tex).toContain('\\AddToHook{shipout/foreground}');
+    expect(tex).toContain(
+      '\\node[anchor=south east,inner sep=0pt,opacity=0.60] at ([xshift=160.00mm,yshift=-90.00mm]current page.north west) {\\includegraphics[width=40.00mm]{stamp.png}};%',
+    );
+    const cleared = tex.lastIndexOf('\\renewcommand{\\bxForeground}{}');
+    expect(cleared).toBeGreaterThan(tex.indexOf('{stamp.png}'));
+  });
+
+  it('draws slide layers above the shared foreground stack', () => {
+    const tex = toLatex(
+      deck({
+        theme: {
+          ...DEFAULT_THEME,
+          foregrounds: {
+            all: [{ ...layer, id: 'fg-x', name: 'seal.png' }],
+            title: [],
+            section: [],
+          },
+        },
+        slides: [frame([], { images: [layer] })],
+      }),
+    );
+    expect(tex.indexOf('{seal.png}')).toBeLessThan(tex.indexOf('{stamp.png}'));
+    expect(tex.match(/\\renewcommand\{\\bxForeground\}/g)).toHaveLength(1);
+  });
+
+  it('collects slide layers with fs keys', () => {
+    const images = collectImages(
+      deck({
+        slides: [
+          frame([], {
+            id: 's1',
+            images: [layer, { ...layer, id: 'fs-2', name: 'badge.png' }],
+          }),
+        ],
+      }),
+    );
+    expect(images.map((entry) => [entry.key, entry.name])).toEqual([
+      ['fs:s1:0', 'stamp.png'],
+      ['fs:s1:1', 'badge.png'],
     ]);
   });
 });

@@ -1320,7 +1320,8 @@ button:disabled {
 }
 
 .bx-slide-bg,
-.bx-slide-fg {
+.bx-slide-fg,
+.bx-slide-fs {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -1334,8 +1335,13 @@ button:disabled {
   z-index: 10;
 }
 
+.bx-slide-fs {
+  z-index: 20;
+}
+
 .bx-slide-bg-layer,
-.bx-slide-fg-layer {
+.bx-slide-fg-layer,
+.bx-slide-fs-layer {
   position: absolute;
   inset: 0;
   background-repeat: no-repeat;

@@ -270,6 +270,49 @@ describe('parseDeck foregrounds', () => {
   });
 });
 
+describe('parseDeck slide images', () => {
+  const src = 'data:image/png;base64,CCCC';
+
+  function withSlideImages(images: unknown): unknown {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{ images?: unknown }>;
+    };
+    raw.slides[1].images = images;
+    return raw;
+  }
+
+  it('fills an empty stack for decks saved before slide images existed', () => {
+    expect(parseDeck(createEmptyDeck())?.slides[1].images).toEqual([]);
+  });
+
+  it('prefixes generated ids with fs and clamps the layer settings', () => {
+    const parsed = parseDeck(
+      withSlideImages([{ src, name: 'stamp.png', rotation: 200, opacity: -3 }]),
+    );
+    expect(parsed?.slides[1].images).toEqual([
+      {
+        id: 'fs-slide-0',
+        src,
+        name: 'stamp.png',
+        opacity: 0,
+        scale: 100,
+        mode: 'scale',
+        position: 'center',
+        offsetX: 0,
+        offsetY: 0,
+        rotation: 180,
+      },
+    ]);
+  });
+
+  it('drops slide images that are not embedded data URLs', () => {
+    const parsed = parseDeck(
+      withSlideImages([{ src: 'https://example.com/stamp.png', name: 'remote' }]),
+    );
+    expect(parsed?.slides[1].images).toEqual([]);
+  });
+});
+
 describe('parseDeck two-column migration', () => {
   it('moves a flat two-column body into a columns container split in half', () => {
     const parsed = parseDeck(

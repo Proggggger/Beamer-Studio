@@ -158,6 +158,7 @@ function validSlides(value: unknown): Slide[] {
       layout,
       // Older decks stored two-column layouts as a flat body split in half.
       body: kind === 'frame' && layout === 'two-column' ? wrapInColumns(body) : body,
+      images: validBackgroundList(raw.images, 'slide', 'fs', 'slide image'),
     });
   }
   return slides;

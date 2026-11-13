@@ -306,6 +306,8 @@ export interface Slide {
   subtitle?: string;
   layout: SlideLayout;
   body: Block[];
+  /** Positioned image layers drawn above this slide only, on top of template foregrounds. */
+  images: BackgroundImageSettings[];
 }
 
 export interface Deck {

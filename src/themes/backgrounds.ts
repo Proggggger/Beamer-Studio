@@ -47,7 +47,7 @@ export const BACKGROUND_ANCHOR_FRACTIONS: Record<
 export function newBackground(
   src: string,
   name: string,
-  prefix: 'bg' | 'fg' = 'bg',
+  prefix: 'bg' | 'fg' | 'fs' = 'bg',
 ): BackgroundImageSettings {
   return {
     id: uid(prefix),

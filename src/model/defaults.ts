@@ -33,15 +33,36 @@ export const DEFAULT_DOCUMENT: DocumentSettings = {
 };
 
 function titleSlide(): Slide {
-  return { id: uid('slide'), kind: 'title', title: '', layout: 'normal', body: [] };
+  return {
+    id: uid('slide'),
+    kind: 'title',
+    title: '',
+    layout: 'normal',
+    body: [],
+    images: [],
+  };
 }
 
 function sectionSlide(title: string): Slide {
-  return { id: uid('slide'), kind: 'section', title, layout: 'normal', body: [] };
+  return {
+    id: uid('slide'),
+    kind: 'section',
+    title,
+    layout: 'normal',
+    body: [],
+    images: [],
+  };
 }
 
 function frameSlide(title: string, body: Block[]): Slide {
-  return { id: uid('slide'), kind: 'frame', title, layout: 'normal', body };
+  return {
+    id: uid('slide'),
+    kind: 'frame',
+    title,
+    layout: 'normal',
+    body,
+    images: [],
+  };
 }
 
 function list(texts: Array<{ text: string; depth?: 0 | 1 | 2 }>): Block {
@@ -172,6 +193,7 @@ export const GALLERY_SLIDE: Slide = {
       ],
     },
   ],
+  images: [],
 };
 
 /** Color themes mostly differ in block/bar colors, so color swatches preview a block. */
@@ -198,4 +220,5 @@ export const COLOR_GALLERY_SLIDE: Slide = {
       ],
     },
   ],
+  images: [],
 };

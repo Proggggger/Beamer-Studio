@@ -130,6 +130,7 @@ describe('background helpers', () => {
     });
     expect(newBackground('data:image/png;base64,AAAA', 'photo.png').id).toMatch(/^bg_/);
     expect(newBackground('data:image/png;base64,AAAA', 'logo.png', 'fg').id).toMatch(/^fg_/);
+    expect(newBackground('data:image/png;base64,AAAA', 'stamp.png', 'fs').id).toMatch(/^fs_/);
   });
 
   it('routes slide kinds to slots', () => {

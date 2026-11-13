@@ -27,11 +27,13 @@ pixel-perfect renderer — the exported `.tex` file is always the source of trut
 - **28 languages** through polyglossia, with a dedicated Greek/Cyrillic face and
   automatic `\textgreek{...}` / `\textrussian{...}` markup so XeLaTeX switches
   fonts instead of dropping glyphs.
-- **Layered slide backgrounds** — any number of images per slot, stacked back to
-  front, with per-layer opacity, size mode, nine anchors, manual X/Y offset
-  sliders and rotation. Title and section pages can override the shared stack.
-- **Foreground image layers** — logos, seals and watermarks drawn above the slide
-  content, using the same stacking, anchors, offsets and rotation controls.
+- **Template image layers** — one **Design → Images** tab with Background and
+  Foreground sub-tabs: any number of stacked images per slot, with per-layer
+  opacity, size mode, nine anchors, fine X/Y offsets and rotation. Title and
+  section pages can override the shared stack.
+- **Per-slide image layers** — the same positioned stack editor on any single
+  slide, drawn above that slide's content, plus a one-click **+ Quick image**
+  action for ordinary in-flow content images.
 - **16:9 and 4:3** decks with live thumbnails.
 - **Project files and autosave** — download/open a `.beamer.json` project with
   embedded images; edits are autosaved in the browser.
@@ -79,8 +81,8 @@ The editor is a single page with four regions:
 2. **Slides rail** — `+ Title`, `+ Section` and `+ Frame` buttons, plus live
    thumbnails.
 3. **Canvas** — the selected slide, fitted to the window with zoom controls.
-4. **Side panel** — switch between **Design** (theme, colors, layout,
-   backgrounds, foregrounds) and **Slide** (frame fields and the block tree).
+4. **Side panel** — switch between **Design** (theme, colors, layout, images)
+   and **Slide** (frame fields, per-slide images and the block tree).
 
 A status bar shows editing hints and shortcuts.
 
@@ -118,7 +120,8 @@ place.
 | **Table of contents** | `\tableofcontents`.                                      |
 
 Each block can be moved, deleted, and given children; blocks and lists support
-indent/outdent where relevant.
+indent/outdent where relevant. **+ Quick image** in the Structure panel opens
+the file picker and appends an Image block with the chosen file already loaded.
 
 ### Themes and colors
 
@@ -163,50 +166,54 @@ The **Design → Layout** tab controls the document's typography:
 Titles that contain script text are wrapped in `\texorpdfstring` so PDF
 bookmarks and metadata remain valid.
 
-### Background layers
+### Template image layers
 
-The **Design → Background** tab attaches images behind slides. There are three
-slots:
+**Design → Images** groups both template image surfaces under one tab. A
+segmented control at the top switches between:
 
-- **All frames** — the shared background.
+- **Background** — images attached behind every slide, behind all frame content.
+- **Foreground** — logos, seals, watermarks and decorative marks drawn above the
+  slide content, including the frame chrome (title bars, sidebars, footer).
+
+Both sub-tabs offer the same three slots:
+
+- **All frames** — the shared stack.
 - **Title page** — replaces the shared stack on the title slide.
 - **Section pages** — replaces the shared stack on section slides.
 
 Each slot holds an ordered **stack** of images drawn back to front, so a backdrop
 and a logo can be combined. Title/section stacks *replace* the shared stack
-rather than adding to it; leave a slot empty to inherit the shared background.
-On the shared slot an empty stack means no background at all.
+rather than adding to it; leave a slot empty to inherit the shared stack, or use
+**Use shared layers** to clear an override. On the shared slot an empty stack
+means no template image at all.
 
 Each layer has:
 
 | Setting            | Effect                                                        |
 | ------------------ | ------------------------------------------------------------- |
-| **Opacity**        | 0–100 %.                                                      |
+| **Opacity**        | 0–100 %, adjustable in 1 % steps.                              |
 | **Size**           | Scale to width, fit inside the page, or stretch to the page.   |
-| **Image width**    | Width as a percentage of the page (scale mode only).           |
+| **Image width**    | Width as a percentage of the page (scale mode only), in 1 % steps. |
 | **Anchor**         | Center, edges or corners — nine positions.                     |
-| **Horizontal / vertical offset** | Fine placement from the anchor, in percent of the page. Positive values move right/down. |
-| **Rotation**       | −180° to 180° clockwise around the anchor.                     |
+| **Horizontal / vertical offset** | Fine placement from the anchor, in percent of the page. Positive values move right/down; 1 % steps. |
+| **Rotation**       | −180° to 180° clockwise around the anchor, in 1° steps.        |
 
 Layers can be reordered, removed, and selected independently; the stack order is
-preserved in the preview, thumbnails and export. Backgrounds are drawn behind
-all slide content.
+preserved in the preview, thumbnails and export. The foreground container
+ignores pointer events, so image layers never block editing on the canvas.
 
-### Foreground layers
+### Per-slide image layers
 
-The **Design → Foreground** tab draws images *above* the slide content — ideal
-for a logo in a corner, a seal, a watermark or decorative marks. It uses the
-same three slots (**All frames**, **Title page**, **Section pages**) and the same
-stack editor as backgrounds:
+Every selected slide has its own **Slide images** card in the right panel, with
+the same stack editor and the same opacity, size, anchor, offset and rotation
+controls as template layers. These layers belong to that slide only and are
+drawn above its content and above any template foreground stack. They work on
+title, section and frame slides alike.
 
-- Each slot holds an ordered stack; later layers draw on top.
-- Title and section stacks replace the shared stack; an empty slot inherits it.
-- Every layer supports opacity, size mode, page width, nine anchors, manual X/Y
-  offsets and rotation.
-
-The foreground container ignores pointer events, so image layers never block
-editing on the canvas. They are above the frame chrome (title bars, sidebars,
-footer) and above block content, matching the PDF export.
+For an ordinary in-flow illustration instead of a positioned overlay, use
+**Slide → Structure → + Quick image**: it opens the file picker, inserts an
+Image block at the end of the frame and selects it so you can set its width,
+caption and position in the block tree.
 
 ### Undo, save and autosave
 
@@ -297,12 +304,12 @@ the document uses fontspec and polyglossia. The chosen font must be installed on
 the machine that compiles it; otherwise the export falls back to Latin Modern
 and prints a package warning instead of failing.
 
-Background layers need a single run. **Foreground layers are page-anchored, so
-run XeLaTeX twice on a fresh compile** — the first run writes the page anchors to
-the `.aux` file and the overlays resolve on the second pass. A first-run PDF may
-show foreground images off-page; simply run the command again.
+Background layers need a single run. **Foreground and per-slide layers are
+page-anchored, so run XeLaTeX twice on a fresh compile** — the first run writes
+the page anchors to the `.aux` file and the overlays resolve on the second pass.
+A first-run PDF may show those images off-page; simply run the command again.
 
-### Images, backgrounds and foregrounds
+### Images, backgrounds, foregrounds and slide layers
 
 Images are embedded in the project JSON but cannot be embedded in LaTeX source.
 Download the referenced files from the export viewer and place them next to the
@@ -338,9 +345,10 @@ to resolve the page node. Layer anchors, size modes, offsets and rotation map to
 and the rotation sign is flipped because TikZ counts counter-clockwise while the
 editor counts clockwise.
 
-Foreground layers are drawn from a `shipout/foreground` hook so they cover the
-frame content, including frame titles and navigation. The per-page stack is
-renewed immediately before each frame:
+Foreground and per-slide layers are drawn from a `shipout/foreground` hook so
+they cover the frame content, including frame titles and navigation. The
+per-page stack is renewed immediately before each frame; a slide with its own
+layers renews the command with the template stack followed by the slide stack:
 
 ```latex
 \newcommand{\bxForeground}{}
@@ -358,8 +366,9 @@ renewed immediately before each frame:
 ```
 
 Because these nodes reference `current page`, a fresh document needs the second
-XeLaTeX pass described above. Backgrounds and foregrounds can be combined; both
-share the same slot/override rules, and rotation is available on either.
+XeLaTeX pass described above. Backgrounds, foregrounds and per-slide layers can
+be combined; the three surfaces share the same anchor, size, offset and rotation
+math.
 
 ### Preview fidelity
 
@@ -388,8 +397,8 @@ especially before presenting or printing.
   around the anchor point; the exporter converts the same anchor fractions,
   offsets, size modes and rotation into TikZ nodes and `\includegraphics`
   options. Both use percent-of-page coordinates, which is why the manual sliders
-  behave identically in the preview and the PDF. Foreground stacks ride in a
-  `shipout/foreground` hook so they stay above all frame content.
+  behave identically in the preview and the PDF. Foreground stacks and per-slide
+  layers ride in a `shipout/foreground` hook so they stay above all frame content.
 - **Robust project I/O.** `parseDeck()` validates and normalizes every field,
   clamps numeric ranges (including rotation to ±180°), migrates legacy image
   shapes (a single image becomes a one-layer stack) and drops malformed blocks
@@ -407,13 +416,14 @@ src/
     Toolbar.tsx           new/open/save, undo/redo, export trigger
     SlideRail.tsx         slide list, add/reorder/duplicate/delete, thumbnails
     PreviewPane.tsx       fitted canvas with zoom
-    Inspector.tsx         slide fields and the block tree editor
-    DesignPanel.tsx       template, colors, layout, background and foreground tabs
+    Inspector.tsx         slide fields, per-slide images and the block tree editor
+    DesignPanel.tsx       template, colors, layout and images tabs
+    ImageStackCard.tsx    shared stack editor for template and slide layers
     ExportDialog.tsx      LaTeX viewer, copy/download, image downloads
     imageFile.ts          client-side image resize/encode
     ColorField.tsx        color input control
   render/
-    SlideCanvas.tsx       frame composition, background and foreground layers
+    SlideCanvas.tsx       frame composition, background, foreground and slide layers
     SlideChrome.tsx       title bars, sidebar, footer per theme
     TitlePage.tsx         title slide rendering
     BlockView.tsx         block rendering for all content types
@@ -439,7 +449,7 @@ src/
     paragraphs.ts         paragraph splitting
     ids.ts                id generation
   export/
-    toLatex.ts            XeLaTeX generation, image collection, background/foreground layers
+    toLatex.ts            XeLaTeX generation, image collection, all image-layer surfaces
     download.ts           blob/text download helpers, slugify
   styles/
     app.css               application, canvas and panel styles
@@ -467,12 +477,12 @@ npm run typecheck
 npm run build
 ```
 
-The Vitest suite (137 tests in 6 files) covers theme resolution and color math,
-background/foreground stack resolution and placement math, project validation
-and legacy migration, store operations, and LaTeX output (preamble, frames,
-blocks, images, background templates and foreground overlays). Layout and image
+The Vitest suite (143 tests in 6 files) covers theme resolution and color math,
+image stack resolution and placement math, project validation and legacy
+migration, store operations, and LaTeX output (preamble, frames, blocks, images,
+background templates, foreground overlays and per-slide layers). Layout and image
 layer behavior have additionally been verified by compiling exported decks with
-MiKTeX XeLaTeX in both aspect ratios — running twice for foreground overlays —
+MiKTeX XeLaTeX in both aspect ratios — running twice for page-anchored overlays —
 and inspecting the resulting PDF pages.
 
 ---
@@ -484,8 +494,8 @@ and inspecting the resulting PDF pages.
   compiling; otherwise Latin Modern is used with a warning.
 - Images are not embedded in `.tex` output — download them from the export
   viewer and keep them beside the source file.
-- Decks with foreground layers need **two XeLaTeX runs** on a fresh compile; the
-  first resolves the page anchors, the second places the overlays.
+- Decks with foreground or per-slide layers need **two XeLaTeX runs** on a fresh
+  compile; the first resolves the page anchors, the second places the overlays.
 - Autosave is local to the current browser/origin. Use **Save** to archive and
   move decks.
 - There is no PDF or PowerPoint export; the deliverable is LaTeX source.
@@ -496,4 +506,4 @@ and inspecting the resulting PDF pages.
 
 Run `npm test`, `npm run typecheck` and `npm run build` before opening a pull
 request, and compile an exported deck with XeLaTeX when changing themes,
-typography, backgrounds, foregrounds or the exporter.
+typography, image layers or the exporter.

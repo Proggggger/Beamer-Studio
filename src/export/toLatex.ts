@@ -242,15 +242,20 @@ function backgroundFillCommands(paper: { w: number; h: number }): string[] {
  * Foreground layers hang off `current page` anchors in a shipout hook, so a
  * fresh compile needs a second XeLaTeX run to resolve them.
  */
+interface ForegroundEntry {
+  layer: BackgroundImageSettings;
+  /** Image-collection key: `fg:<slot>:<index>` or `fs:<slideId>:<index>`. */
+  key: string;
+}
+
 function foregroundNodeCommands(
-  layers: BackgroundImageSettings[],
+  entries: ForegroundEntry[],
   names: Map<string, string>,
-  slot: string,
   paper: { w: number; h: number },
 ): string[] {
   const commands = ['\\renewcommand{\\bxForeground}{%'];
-  layers.forEach((layer, index) => {
-    const name = names.get(`fg:${slot}:${index}`);
+  entries.forEach(({ layer, key }) => {
+    const name = names.get(key);
     if (!name) return;
     const anchor = BACKGROUND_ANCHOR_FRACTIONS[layer.position];
     const size = imageSizeOptions(layer, paper);
@@ -266,7 +271,11 @@ function foregroundNodeCommands(
 }
 
 export interface LatexImage {
-  /** 'block:<id>' for image blocks, 'bg:<slot>:<index>' for background layers. */
+  /**
+   * 'block:<id>' for image blocks, 'bg:<slot>:<index>' for background layers,
+   * 'fg:<slot>:<index>' for template foregrounds and 'fs:<slideId>:<index>'
+   * for per-slide layers.
+   */
   key: string;
   name: string;
   dataUrl: string;
@@ -309,6 +318,11 @@ export function collectImages(deck: Deck): LatexImage[] {
   for (const slot of ['all', 'title', 'section'] as const) {
     foregrounds[slot].forEach((layer, index) => {
       if (layer.src) add(`fg:${slot}:${index}`, layer.name || 'foreground', layer.src);
+    });
+  }
+  for (const slide of deck.slides) {
+    slide.images.forEach((layer, index) => {
+      if (layer.src) add(`fs:${slide.id}:${index}`, layer.name || 'slide image', layer.src);
     });
   }
   return images;
@@ -530,9 +544,10 @@ export function toLatex(deck: Deck): string {
   const hasBackgrounds = (['all', 'title', 'section'] as const).some(
     (slot) => theme.backgrounds[slot].length > 0,
   );
-  const hasForegrounds = (['all', 'title', 'section'] as const).some(
-    (slot) => theme.foregrounds[slot].length > 0,
-  );
+  const hasForegrounds =
+    (['all', 'title', 'section'] as const).some(
+      (slot) => theme.foregrounds[slot].length > 0,
+    ) || deck.slides.some((slide) => slide.images.length > 0);
 
   lines.push('% !TeX program = xelatex');
   if (deck.aspect === '169') {
@@ -712,12 +727,23 @@ export function toLatex(deck: Deck): string {
   let appliedForeground = 'none';
   for (const slide of deck.slides) {
     if (hasForegrounds) {
-      const foreground = resolveSlideLayers(theme.foregrounds, slide.kind);
-      const key = foreground ? `fg:${foreground.slot}` : 'none';
+      const template = resolveSlideLayers(theme.foregrounds, slide.kind);
+      const entries: ForegroundEntry[] = [
+        ...(template
+          ? template.layers.map((layer, index) => ({
+              layer,
+              key: `fg:${template.slot}:${index}`,
+            }))
+          : []),
+        ...slide.images.map((layer, index) => ({ layer, key: `fs:${slide.id}:${index}` })),
+      ];
+      const key = `${template ? `fg:${template.slot}` : 'none'}|${
+        slide.images.length > 0 ? `fs:${slide.id}` : ''
+      }`;
       if (key !== appliedForeground) {
         lines.push(
-          ...(foreground
-            ? foregroundNodeCommands(foreground.layers, imageNames, foreground.slot, paper)
+          ...(entries.length > 0
+            ? foregroundNodeCommands(entries, imageNames, paper)
             : ['\\renewcommand{\\bxForeground}{}']),
         );
         lines.push('');

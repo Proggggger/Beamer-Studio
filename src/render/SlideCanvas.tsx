@@ -294,6 +294,14 @@ export function SlideCanvas({
           pageHeight={theme.page.h}
         />
       ) : null}
+      {slide.images.length > 0 ? (
+        <ImageLayers
+          layers={slide.images}
+          className="bx-slide-fs"
+          pageWidth={theme.page.w}
+          pageHeight={theme.page.h}
+        />
+      ) : null}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { isHexColor } from '../themes/colorMath';
 import { resolveTheme } from '../themes/resolve';
 import { ColorField } from './ColorField';
 import { readImageFile } from './imageFile';
+import { ImageStackCard } from './ImageStackCard';
 
 const BLOCK_TYPES: Array<{ type: BlockType; label: string }> = [
   { type: 'paragraph', label: 'Paragraph' },
@@ -653,10 +654,34 @@ function SlideEditor({ deck }: { deck: Deck }) {
   const duplicateSlide = useDeckStore((state) => state.duplicateSlide);
   const deleteSlide = useDeckStore((state) => state.deleteSlide);
   const addBlock = useDeckStore((state) => state.addBlock);
+  const updateBlock = useDeckStore((state) => state.updateBlock);
   const selectedBlockId = useDeckStore((state) => state.selectedBlockId);
+  const quickImageRef = useRef<HTMLInputElement>(null);
+  const [readingQuickImage, setReadingQuickImage] = useState(false);
   const slide = deck.slides.find((entry) => entry.id === selectedSlideId);
   if (!slide) return <p className="muted">No slide selected.</p>;
   const block = findBlock(slide.body, selectedBlockId ?? '');
+
+  const addQuickImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setReadingQuickImage(true);
+    try {
+      const result = await readImageFile(file);
+      const id = addBlock('image');
+      updateBlock(
+        id,
+        (target) =>
+          target.type === 'image' ? { ...target, src: result.src, name: result.name } : target,
+        `quick-image:${id}`,
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not read that image.');
+    } finally {
+      setReadingQuickImage(false);
+    }
+  };
 
   return (
     <>
@@ -736,6 +761,19 @@ function SlideEditor({ deck }: { deck: Deck }) {
         </div>
       </section>
 
+      <ImageStackCard
+        title="Slide images"
+        hint="Positioned image layers drawn above this slide's content and template foregrounds. They apply to this slide only."
+        layers={slide.images}
+        prefix="fs"
+        emptyLabel="No image layers on this slide yet."
+        inherited={false}
+        inheritedLabel=""
+        onChange={(images) =>
+          updateSlide(slide.id, { images }, `slide-images:${slide.id}`)
+        }
+      />
+
       {slide.kind === 'frame' ? (
         <>
           <section className="panel-section">
@@ -754,7 +792,22 @@ function SlideEditor({ deck }: { deck: Deck }) {
               <button type="button" className="btn btn-tiny" onClick={() => addBlock('paragraph')}>
                 + Quick paragraph
               </button>
+              <button
+                type="button"
+                className="btn btn-tiny"
+                disabled={readingQuickImage}
+                onClick={() => quickImageRef.current?.click()}
+              >
+                {readingQuickImage ? 'Reading…' : '+ Quick image'}
+              </button>
             </div>
+            <input
+              ref={quickImageRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => void addQuickImage(event)}
+            />
           </section>
           {block ? <SelectedBlockEditor block={block} /> : null}
         </>

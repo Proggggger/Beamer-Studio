@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useDeckStore } from '../model/store';
 import { COLOR_GALLERY_SLIDE, GALLERY_SLIDE } from '../model/defaults';
 import type {
@@ -11,11 +11,8 @@ import type {
 } from '../model/types';
 import { COLOR_THEME_NAMES, THEME_NAMES, THEME_SPECS, themeSpec } from '../themes/beamerThemes';
 import {
-  BACKGROUND_MODES,
-  BACKGROUND_POSITIONS,
   EMPTY_BACKGROUNDS,
   EMPTY_FOREGROUNDS,
-  newBackground,
 } from '../themes/backgrounds';
 import { TRANSPARENT } from '../themes/colorMath';
 import { FONT_OPTIONS, FONT_SIZES, CUSTOM_FONT_ID, resolveFont } from '../themes/fonts';
@@ -23,7 +20,7 @@ import { LANGUAGE_OPTIONS, languageOption, languageScripts } from '../themes/lan
 import { resolveTheme } from '../themes/resolve';
 import { ScaledSlide } from '../render/SlideCanvas';
 import { ColorField } from './ColorField';
-import { readImageFile } from './imageFile';
+import { ImageStackCard } from './ImageStackCard';
 
 const COLOR_KEYS: Array<{ key: keyof Omit<CustomColors, 'enabled'>; label: string }> = [
   { key: 'structure', label: 'Structure / accent' },
@@ -461,250 +458,12 @@ const IMAGE_SLOTS: Array<{
   { slot: 'section', title: 'Section pages' },
 ];
 
-function ImageStackCard({
-  slot,
-  title,
-  hint,
-  layers,
-  inherited,
-  emptyLabel,
-  inheritedLabel,
-  prefix,
-  onChange,
-}: {
-  slot: keyof SlideImageStacks;
-  title: string;
-  hint: string;
-  layers: BackgroundImageSettings[];
-  inherited: boolean;
-  emptyLabel: string;
-  inheritedLabel: string;
-  prefix: 'bg' | 'fg';
-  onChange: (layers: BackgroundImageSettings[]) => void;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = layers.find((layer) => layer.id === selectedId) ?? layers[0];
+type ImageSurface = 'background' | 'foreground';
 
-  const add = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      const result = await readImageFile(file);
-      const layer = newBackground(result.src, result.name, prefix);
-      setSelectedId(layer.id);
-      onChange([...layers, layer]);
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Could not read that image.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const update = (patch: Partial<BackgroundImageSettings>) => {
-    if (!selected) return;
-    onChange(layers.map((layer) => (layer.id === selected.id ? { ...layer, ...patch } : layer)));
-  };
-
-  const remove = (id: string) => {
-    const next = layers.filter((layer) => layer.id !== id);
-    if (selectedId === id) setSelectedId(next[0]?.id ?? null);
-    onChange(next);
-  };
-
-  const move = (id: string, delta: number) => {
-    const from = layers.findIndex((layer) => layer.id === id);
-    const to = from + delta;
-    if (from < 0 || to < 0 || to >= layers.length) return;
-    const next = [...layers];
-    [next[from], next[to]] = [next[to], next[from]];
-    onChange(next);
-  };
-
-  const modeLabel = (id: BackgroundImageSettings['mode']) =>
-    BACKGROUND_MODES.find((entry) => entry.id === id)?.label ?? id;
-  const positionLabel = (id: BackgroundImageSettings['position']) =>
-    BACKGROUND_POSITIONS.find((entry) => entry.id === id)?.label ?? id;
-
-  return (
-    <section className="panel-section bg-card">
-      <h3>{title}</h3>
-      <p className="panel-hint">{hint}</p>
-      {layers.length > 0 ? (
-        <>
-          <div className="bg-layers">
-            {layers.map((layer, index) => (
-              <div
-                key={layer.id}
-                className={`bg-layer${selected?.id === layer.id ? ' is-selected' : ''}`}
-                onClick={() => setSelectedId(layer.id)}
-              >
-                <div className="bg-layer-thumb">
-                  <img src={layer.src} alt="" />
-                </div>
-                <div className="bg-layer-text">
-                  <span className="bg-name" title={layer.name}>
-                    {layer.name}
-                  </span>
-                  <span className="bg-layer-meta">
-                    {positionLabel(layer.position)} · {modeLabel(layer.mode)} · {layer.opacity}%
-                    {layer.rotation !== 0 ? ` · ${layer.rotation}°` : ''}
-                  </span>
-                </div>
-                <div className="bg-layer-actions" onClick={(event) => event.stopPropagation()}>
-                  <button
-                    type="button"
-                    title="Move up"
-                    disabled={index === 0}
-                    onClick={() => move(layer.id, -1)}
-                  >
-                    &#9652;
-                  </button>
-                  <button
-                    type="button"
-                    title="Move down"
-                    disabled={index === layers.length - 1}
-                    onClick={() => move(layer.id, 1)}
-                  >
-                    &#9662;
-                  </button>
-                  <button type="button" title="Remove layer" onClick={() => remove(layer.id)}>
-                    &#10005;
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="panel-hint bg-stack-hint">
-            Layers draw in order; the last image sits on top. Offsets are a percentage of the page,
-            and rotation turns each layer around its anchor.
-          </p>
-          {selected ? (
-            <>
-              <Field label={`Opacity · ${selected.opacity}%`}>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={selected.opacity}
-                  onChange={(event) => update({ opacity: Number(event.target.value) })}
-                />
-              </Field>
-              <Field label="Size">
-                <select
-                  value={selected.mode}
-                  onChange={(event) =>
-                    update({ mode: event.target.value as BackgroundImageSettings['mode'] })
-                  }
-                >
-                  {BACKGROUND_MODES.map((mode) => (
-                    <option key={mode.id} value={mode.id}>
-                      {mode.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {selected.mode === 'scale' ? (
-                <Field label={`Image width · ${selected.scale}%`}>
-                  <input
-                    type="range"
-                    min={10}
-                    max={200}
-                    step={5}
-                    value={selected.scale}
-                    onChange={(event) => update({ scale: Number(event.target.value) })}
-                  />
-                </Field>
-              ) : null}
-              <Field label="Anchor">
-                <select
-                  value={selected.position}
-                  onChange={(event) =>
-                    update({ position: event.target.value as BackgroundImageSettings['position'] })
-                  }
-                >
-                  {BACKGROUND_POSITIONS.map((position) => (
-                    <option key={position.id} value={position.id}>
-                      {position.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={`Horizontal offset · ${selected.offsetX}%`}>
-                <input
-                  type="range"
-                  min={-50}
-                  max={50}
-                  step={1}
-                  value={selected.offsetX}
-                  onChange={(event) => update({ offsetX: Number(event.target.value) })}
-                />
-              </Field>
-              <Field label={`Vertical offset · ${selected.offsetY}%`}>
-                <input
-                  type="range"
-                  min={-50}
-                  max={50}
-                  step={1}
-                  value={selected.offsetY}
-                  onChange={(event) => update({ offsetY: Number(event.target.value) })}
-                />
-              </Field>
-              <Field label={`Rotation · ${selected.rotation}°`}>
-                <input
-                  type="range"
-                  min={-180}
-                  max={180}
-                  step={5}
-                  value={selected.rotation}
-                  onChange={(event) => update({ rotation: Number(event.target.value) })}
-                />
-              </Field>
-            </>
-          ) : null}
-          <div className="bg-row">
-            <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
-              {busy ? 'Reading…' : 'Add image'}
-            </button>
-            {slot !== 'all' ? (
-              <button type="button" className="btn btn-tiny" onClick={() => onChange([])}>
-                Use shared layers
-              </button>
-            ) : null}
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="panel-hint">
-            {inherited ? inheritedLabel : emptyLabel}
-          </p>
-          <div className="bg-row">
-            <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
-              {busy ? 'Reading…' : 'Choose image'}
-            </button>
-          </div>
-        </>
-      )}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = '';
-          void add(file);
-        }}
-      />
-    </section>
-  );
-}
-
-function ImageStacksPanel({ surface }: { surface: 'background' | 'foreground' }) {
+function ImageStacksPanel() {
   const theme = useDeckStore((state) => state.deck.theme);
   const updateTheme = useDeckStore((state) => state.updateTheme);
+  const [surface, setSurface] = useState<ImageSurface>('background');
   const isBackground = surface === 'background';
   const stacks = isBackground ? theme.backgrounds : theme.foregrounds;
   const noun = isBackground ? 'background' : 'foreground';
@@ -712,6 +471,22 @@ function ImageStacksPanel({ surface }: { surface: 'background' | 'foreground' })
 
   return (
     <>
+      <div className="segmented" role="group" aria-label="Template image surface">
+        <button
+          type="button"
+          className={isBackground ? 'is-active' : ''}
+          onClick={() => setSurface('background')}
+        >
+          Background
+        </button>
+        <button
+          type="button"
+          className={!isBackground ? 'is-active' : ''}
+          onClick={() => setSurface('foreground')}
+        >
+          Foreground
+        </button>
+      </div>
       <p className="panel-hint bg-intro">
         {isBackground
           ? 'Backgrounds sit behind the slide content in the preview and the XeLaTeX export.'
@@ -719,31 +494,34 @@ function ImageStacksPanel({ surface }: { surface: 'background' | 'foreground' })
         Each slot is a stack: add several images (a backdrop and a logo, for example) and later
         layers draw on top. Title and section pages can override the shared stack.
       </p>
-      {IMAGE_SLOTS.map(({ slot, title }) => (
-        <ImageStackCard
-          key={slot}
-          slot={slot}
-          title={title}
-          hint={
-            slot === 'all'
-              ? `Drawn ${placement} every slide unless the title or section page overrides it.`
-              : `Adds a dedicated ${noun} stack for these pages, or reuses the shared one.`
-          }
-          layers={stacks[slot]}
-          inherited={slot !== 'all' && stacks[slot].length === 0 && stacks.all.length > 0}
-          emptyLabel={`No ${noun} image.`}
-          inheritedLabel={`No override — using the shared ${noun} stack.`}
-          prefix={isBackground ? 'bg' : 'fg'}
-          onChange={(layers) =>
-            updateTheme(
-              isBackground
-                ? { backgrounds: { ...stacks, [slot]: layers } }
-                : { foregrounds: { ...stacks, [slot]: layers } },
-              `${surface}:${slot}`,
-            )
-          }
-        />
-      ))}
+      {IMAGE_SLOTS.map(({ slot, title }) => {
+        const apply = (layers: BackgroundImageSettings[]) =>
+          updateTheme(
+            isBackground
+              ? { backgrounds: { ...stacks, [slot]: layers } }
+              : { foregrounds: { ...stacks, [slot]: layers } },
+            `${surface}:${slot}`,
+          );
+        return (
+          <ImageStackCard
+            key={slot}
+            title={title}
+            hint={
+              slot === 'all'
+                ? `Drawn ${placement} every slide unless the title or section page overrides it.`
+                : `Adds a dedicated ${noun} stack for these pages, or reuses the shared one.`
+            }
+            layers={stacks[slot]}
+            inherited={slot !== 'all' && stacks[slot].length === 0 && stacks.all.length > 0}
+            emptyLabel={`No ${noun} image.`}
+            inheritedLabel={`No override — using the shared ${noun} stack.`}
+            prefix={isBackground ? 'bg' : 'fg'}
+            resetLabel={slot === 'all' ? undefined : 'Use shared layers'}
+            onReset={slot === 'all' ? undefined : () => apply([])}
+            onChange={apply}
+          />
+        );
+      })}
     </>
   );
 }
@@ -777,24 +555,16 @@ export function DesignPanel() {
         </button>
         <button
           type="button"
-          className={designTab === 'background' ? 'is-active' : ''}
-          onClick={() => setDesignTab('background')}
+          className={designTab === 'images' ? 'is-active' : ''}
+          onClick={() => setDesignTab('images')}
         >
-          Background
-        </button>
-        <button
-          type="button"
-          className={designTab === 'foreground' ? 'is-active' : ''}
-          onClick={() => setDesignTab('foreground')}
-        >
-          Foreground
+          Images
         </button>
       </div>
       {designTab === 'template' ? <TemplateGallery /> : null}
       {designTab === 'colors' ? <ColorGallery /> : null}
       {designTab === 'layout' ? <LayoutSettings /> : null}
-      {designTab === 'background' ? <ImageStacksPanel surface="background" /> : null}
-      {designTab === 'foreground' ? <ImageStacksPanel surface="foreground" /> : null}
+      {designTab === 'images' ? <ImageStacksPanel /> : null}
     </div>
   );
 }
