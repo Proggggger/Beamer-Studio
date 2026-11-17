@@ -3,6 +3,7 @@ import { BACKGROUND_POSITIONS } from '../themes/backgrounds';
 import { CUSTOM_FONT_ID, FONT_IDS, FONT_SIZES, sanitizeFontName } from '../themes/fonts';
 import { LANGUAGE_IDS } from '../themes/languages';
 import { wrapInColumns } from './blockOps';
+import { validCodeLang } from './code';
 import { DEFAULT_DOCUMENT, DEFAULT_META, DEFAULT_THEME } from './defaults';
 import { uid } from './ids';
 import type {
@@ -12,12 +13,17 @@ import type {
   CustomColors,
   Deck,
   DocumentSettings,
+  FontChoice,
   FontId,
   Item,
   LanguageId,
   Slide,
   SlideImageStacks,
   ThemeSettings,
+  TikzDrawing,
+  TikzPoint,
+  TikzShape,
+  TikzShapeKind,
 } from './types';
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -61,6 +67,107 @@ function validItem(value: unknown): Item | null {
   };
 }
 
+const TIKZ_KINDS: TikzShapeKind[] = ['line', 'arrow', 'rect', 'ellipse', 'text', 'path'];
+
+function finite(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function coord(value: unknown, fallback: number): number {
+  return Math.round(Math.max(-1000, Math.min(1000, finite(value, fallback))) * 100) / 100;
+}
+
+function validTikzPoint(value: unknown): TikzPoint | null {
+  if (!isObject(value)) return null;
+  return { x: coord(value.x, 0), y: coord(value.y, 0) };
+}
+
+function validTikzShape(value: unknown): TikzShape | null {
+  if (!isObject(value)) return null;
+  const kind = TIKZ_KINDS.find((entry) => entry === value.kind);
+  if (!kind) return null;
+  const shape: TikzShape = {
+    id: str(value.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || uid('shape'),
+    kind,
+    x: coord(value.x, 0),
+    y: coord(value.y, 0),
+  };
+  if (kind === 'line' || kind === 'arrow' || kind === 'rect' || kind === 'ellipse') {
+    shape.x2 = coord(value.x2, shape.x);
+    shape.y2 = coord(value.y2, shape.y);
+  }
+  if (kind === 'path') {
+    const points = Array.isArray(value.points)
+      ? value.points
+          .slice(0, 2000)
+          .map(validTikzPoint)
+          .filter((point): point is TikzPoint => point !== null)
+      : [];
+    if (points.length < 2) return null;
+    shape.points = points;
+    shape.closed = value.closed === true;
+    shape.arrow = value.arrow === true;
+  }
+  if (kind === 'text') {
+    shape.text = str(value.text)
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
+      .slice(0, 500);
+    shape.fontSize = Math.max(1, Math.min(40, finite(value.fontSize, 4)));
+  }
+  const canLabel = kind === 'rect' || kind === 'ellipse' || (kind === 'path' && shape.closed);
+  if (canLabel) {
+    const label = str(value.text)
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
+      .slice(0, 500);
+    if (label) {
+      shape.text = label;
+      shape.fontSize = Math.max(1, Math.min(40, finite(value.fontSize, 4)));
+      const textColor = normalizeHex(value.textColor);
+      if (textColor) shape.textColor = textColor;
+    }
+  }
+  if (kind === 'rect' && typeof value.cornerRadius === 'number' && Number.isFinite(value.cornerRadius)) {
+    const radius = Math.round(Math.max(0, Math.min(20, value.cornerRadius)) * 2) / 2;
+    if (radius > 0) shape.cornerRadius = radius;
+  }
+  for (const key of ['strokeOpacity', 'fillOpacity', 'textOpacity'] as const) {
+    const opacity = value[key];
+    if (typeof opacity === 'number' && Number.isFinite(opacity)) {
+      const clamped = Math.round(Math.max(0, Math.min(100, opacity)));
+      if (clamped < 100) shape[key] = clamped;
+    }
+  }
+  if (typeof value.rotation === 'number' && Number.isFinite(value.rotation) && value.rotation !== 0) {
+    shape.rotation = Math.round(Math.max(-180, Math.min(180, value.rotation)));
+  }
+  if (typeof value.stroke === 'string') {
+    const stroke = value.stroke === 'none' ? 'none' : normalizeHex(value.stroke);
+    if (stroke) shape.stroke = stroke;
+  }
+  const fill = normalizeHex(typeof value.fill === 'string' ? value.fill : undefined);
+  if (fill) shape.fill = fill;
+  if (typeof value.strokeWidth === 'number' && Number.isFinite(value.strokeWidth)) {
+    shape.strokeWidth = Math.round(Math.max(0, Math.min(5, value.strokeWidth)) * 20) / 20;
+  }
+  if (value.dashed === true) shape.dashed = true;
+  return shape;
+}
+
+function validTikzDrawing(value: unknown): TikzDrawing {
+  const raw = isObject(value) ? value : {};
+  const width = Math.round(Math.max(10, Math.min(400, finite(raw.width, 80))));
+  const height = Math.round(Math.max(10, Math.min(400, finite(raw.height, 50))));
+  const shapes = Array.isArray(raw.shapes)
+    ? raw.shapes
+        .slice(0, 500)
+        .map(validTikzShape)
+        .filter((shape): shape is TikzShape => shape !== null)
+    : [];
+  const code =
+    typeof raw.code === 'string' ? raw.code.replace(/\u0000/g, '').slice(0, 20000) : '';
+  return { width, height, shapes, code: code.trim() ? code : undefined };
+}
+
 function validBlocks(value: unknown, depth = 0): Block[] {
   if (!Array.isArray(value) || depth > 3) return [];
   const blocks: Block[] = [];
@@ -78,6 +185,7 @@ function validBlocks(value: unknown, depth = 0): Block[] {
             typeof raw.indent === 'number' && Number.isFinite(raw.indent) && raw.indent > 0
               ? Math.min(8, raw.indent)
               : undefined,
+          font: validFontChoice(raw.font),
         });
         break;
       case 'list':
@@ -88,6 +196,7 @@ function validBlocks(value: unknown, depth = 0): Block[] {
           items: Array.isArray(raw.items)
             ? raw.items.map(validItem).filter((item): item is Item => item !== null)
             : [],
+          font: validFontChoice(raw.font),
         });
         break;
       case 'block':
@@ -101,6 +210,7 @@ function validBlocks(value: unknown, depth = 0): Block[] {
           title: str(raw.title),
           body: validBlocks(raw.body, depth + 1),
           colors: validBlockColors(raw.colors),
+          font: validFontChoice(raw.font),
         });
         break;
       case 'columns':
@@ -109,6 +219,7 @@ function validBlocks(value: unknown, depth = 0): Block[] {
           type: 'columns',
           left: validBlocks(raw.left, depth + 1),
           right: validBlocks(raw.right, depth + 1),
+          font: validFontChoice(raw.font),
         });
         break;
       case 'image':
@@ -119,21 +230,37 @@ function validBlocks(value: unknown, depth = 0): Block[] {
           name: str(raw.name, 'image.png'),
           widthPct: typeof raw.widthPct === 'number' ? Math.max(10, Math.min(100, raw.widthPct)) : 60,
           caption: str(raw.caption),
+          font: validFontChoice(raw.font),
         });
         break;
       case 'math':
-        blocks.push({ id, type: 'math', tex: str(raw.tex) });
+        blocks.push({ id, type: 'math', tex: str(raw.tex), font: validFontChoice(raw.font) });
         break;
       case 'code':
         blocks.push({
           id,
           type: 'code',
-          lang: str(raw.lang, 'text'),
+          lang: validCodeLang(raw.lang),
           text: str(raw.text),
+          caption: str(raw.caption),
+          lineNumbers: raw.lineNumbers === true,
+          font: validFontChoice(raw.font),
         });
         break;
       case 'toc':
-        blocks.push({ id, type: 'toc' });
+        blocks.push({ id, type: 'toc', font: validFontChoice(raw.font) });
+        break;
+      case 'tikz':
+        blocks.push({
+          id,
+          type: 'tikz',
+          name: str(raw.name, 'TikZ drawing').slice(0, 120),
+          widthPct:
+            typeof raw.widthPct === 'number' ? Math.max(10, Math.min(100, raw.widthPct)) : 70,
+          caption: str(raw.caption),
+          drawing: validTikzDrawing(raw.drawing),
+          font: validFontChoice(raw.font),
+        });
         break;
       default:
         break;
@@ -159,6 +286,7 @@ function validSlides(value: unknown): Slide[] {
       // Older decks stored two-column layouts as a flat body split in half.
       body: kind === 'frame' && layout === 'two-column' ? wrapInColumns(body) : body,
       images: validBackgroundList(raw.images, 'slide', 'fs', 'slide image'),
+      font: validFontChoice(raw.font),
     });
   }
   return slides;
@@ -182,8 +310,9 @@ function validBackground(
   fallbackName: string,
 ): BackgroundImageSettings | null {
   if (!isObject(value)) return null;
+  const kind = value.kind === 'tikz' ? 'tikz' : 'image';
   const src = str(value.src);
-  if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(src)) return null;
+  if (kind === 'image' && !/^data:image\/[a-z0-9.+-]+;base64,/i.test(src)) return null;
   const name = str(value.name, fallbackName)
     .replace(/[\u0000-\u001f\\{}]/g, '')
     .trim()
@@ -218,7 +347,9 @@ function validBackground(
     : 'center';
   return {
     id,
-    src,
+    ...(kind === 'tikz'
+      ? { kind: 'tikz' as const, src: '', drawing: validTikzDrawing(value.drawing) }
+      : { src }),
     name: name || fallbackName,
     opacity,
     mode,
@@ -271,13 +402,26 @@ const LEGACY_FONTS: Record<string, FontId> = {
   serif: 'latin-modern-roman',
 };
 
+function knownFontId(value: unknown): FontId | null {
+  if (typeof value !== 'string') return null;
+  if ((FONT_IDS as string[]).includes(value)) return value as FontId;
+  return LEGACY_FONTS[value] ?? null;
+}
+
 function validFontId(value: unknown): FontId {
-  if (typeof value === 'string') {
-    if ((FONT_IDS as string[]).includes(value)) return value as FontId;
-    const legacy = LEGACY_FONTS[value];
-    if (legacy) return legacy;
+  return knownFontId(value) ?? DEFAULT_THEME.fontFamily;
+}
+
+/** Slide/block font overrides are optional, so unknown ids inherit instead. */
+function validFontChoice(value: unknown): FontChoice | undefined {
+  if (!isObject(value)) return undefined;
+  const family = knownFontId(value.family);
+  if (!family) return undefined;
+  if (family === CUSTOM_FONT_ID) {
+    const custom = sanitizeFontName(value.custom);
+    return custom ? { family, custom } : undefined;
   }
-  return DEFAULT_THEME.fontFamily;
+  return { family };
 }
 
 function validDocument(value: unknown): DocumentSettings {

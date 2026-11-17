@@ -24,6 +24,11 @@ pixel-perfect renderer — the exported `.tex` file is always the source of trut
   verbatim.
 - **33 font families** grouped into TeX fonts, Windows system fonts and web /
   Google fonts, plus a custom family field for anything else fontspec knows.
+  The same picker can override the font for one slide's content or for a single
+  block, so a quote, a verse or a code listing can carry its own face.
+- **Syntax-listing code blocks** — 27 recognised languages, an optional caption
+  and optional line numbers, exported through the `listings` package inside
+  `fragile` frames.
 - **28 languages** through polyglossia, with a dedicated Greek/Cyrillic face and
   automatic `\textgreek{...}` / `\textrussian{...}` markup so XeLaTeX switches
   fonts instead of dropping glyphs.
@@ -34,11 +39,22 @@ pixel-perfect renderer — the exported `.tex` file is always the source of trut
 - **Per-slide image layers** — the same positioned stack editor on any single
   slide, drawn above that slide's content, plus a one-click **+ Quick image**
   action for ordinary in-flow content images.
+- **TikZ drawings** — a shape editor with lines, arrows, rectangles (including
+  rounded corners), ellipses, freeform paths and text, plus a live TikZ code
+  pane. Shapes can carry labels, each paint has its own opacity, and new arrows
+  and paths magnetise to corners, edges and centres of existing shapes. Every
+  shape keeps draggable geometry handles (line/arrow endpoints, rectangle and
+  ellipse corners, path vertices), and connectors sitting on an anchor stay
+  glued to it when the host shape moves. Drawings
+  work as content blocks inside frames and as positioned background, foreground
+  or per-slide layers; the code is exported verbatim as real `tikzpicture`
+  source.
 - **16:9 and 4:3** decks with live thumbnails.
 - **Project files and autosave** — download/open a `.beamer.json` project with
   embedded images; edits are autosaved in the browser.
 - **Clean XeLaTeX export** — theme, colortheme, fontspec, polyglossia, custom
-  colors and TikZ image layers are emitted as a ready-to-compile document.
+  colors, TikZ drawings and TikZ image layers are emitted as a ready-to-compile
+  document.
 
 ---
 
@@ -116,12 +132,49 @@ place.
 | **Columns**        | Two `columns` environments (`0.48\textwidth` each).         |
 | **Image**          | `\includegraphics` at a chosen width, with optional caption. |
 | **Math**           | Display math (`\[ ... \]`).                                 |
-| **Code**           | `verbatim` listing; the containing frame is marked `fragile`. |
+| **Code**           | `listings` block with an optional dialect, caption and line numbers; the containing frame is marked `fragile`. |
+| **TikZ drawing**   | A centered `tikzpicture` scaled to a chosen text width, with optional caption. |
 | **Table of contents** | `\tableofcontents`.                                      |
 
 Each block can be moved, deleted, and given children; blocks and lists support
 indent/outdent where relevant. **+ Quick image** in the Structure panel opens
 the file picker and appends an Image block with the chosen file already loaded.
+**+ Quick code** appends a Python listing and selects it, ready to edit.
+
+#### Code listings
+
+Code blocks are backed by LaTeX's `listings` package (loaded automatically when
+the deck contains code). The inspector offers:
+
+- **Language** — from 27 entries. A curated set has a matching `listings`
+  dialect, so the export enables syntax highlighting: Python, C, C++, Java,
+  HTML, XML, SQL, Bash, LaTeX (`TeX`), MATLAB, R, Perl, Ruby, Pascal, Haskell,
+  Lisp, Fortran, Verilog and VHDL. JavaScript, TypeScript, C#, CSS, JSON, YAML,
+  PowerShell and plain text are exported as unhighlighted monospaced listings
+  (the label says *plain*) because `listings` ships no safe built-in dialect for
+  them.
+- **Line numbers** — prints `numbers=left` with a small numeric margin; the
+  canvas preview shows the same numbered gutter.
+- **Caption** — an optional listing caption printed below the code.
+
+The preview shows a language badge, the numbered gutter when enabled, and the
+caption. Frames containing code are exported as `\begin{frame}[fragile]`, which
+is required by `listings`.
+
+#### Font overrides
+
+A font can be set at two narrower scopes than the document theme:
+
+- **Content font** on a frame or section slide (Slide tab) changes that slide's
+  body or section page only; title pages always use the theme face.
+- **Block font** in a selected block's inspector changes just that block,
+  including nested blocks and any one of columns, paragraphs, lists, blocks,
+  images, math, code, TikZ and TOC.
+
+Both pickers reuse the same 33-family catalog and custom family field as the
+theme, and offer **Inherit from theme** to clear an override. Block-scoped
+overrides apply to everything the block renders, including code listings and
+their captions.
 
 ### Themes and colors
 
@@ -215,6 +268,50 @@ For an ordinary in-flow illustration instead of a positioned overlay, use
 Image block at the end of the frame and selects it so you can set its width,
 caption and position in the block tree.
 
+### TikZ drawings
+
+Diagrams, schemas and plots can be drawn directly in the editor. A drawing is
+plain geometry in millimetres; the app renders it as SVG on the canvas and as
+TikZ in the export, so what you lay out is what gets compiled.
+
+There are two ways to place a drawing:
+
+- **Content block in a frame** — in **Slide → Structure**, choose **+ Add block**
+  and pick **TikZ drawing**. The block behaves like an image: set its name,
+  width (10–100 % of `\textwidth`) and optional caption in the inspector. Use
+  this for in-flow charts and diagrams.
+- **Positioned layer** — **Add TikZ** in the template **Design → Images**
+  background/foreground sub-tabs or in the **Slide images** card. A TikZ layer
+  takes the same opacity, size mode, nine anchors, X/Y offsets and rotation as
+  an image layer, and can be mixed into the same stack.
+
+Both open the same modal editor:
+
+| Area | What it does |
+| ---- | ------------ |
+| **Canvas** | Click-drag with **Line**, **Arrow**, **Rect** or **Ellipse**; **Text** places a label at the click point; **Path** records click-by-click points (press `Enter` to finish). Everything snaps to 0.5 mm. While **Magnet** is on, line, arrow and path points snap to the nearest corner, edge midpoint or centre of an existing shape (shown as dots on the canvas, with an orange ring on the active anchor); magnet anchors win over the grid and the toggle turns the behaviour off. Selecting a shape in **Select** mode shows draggable handles — both ends of a line or arrow, every vertex of a path, and the four corners of a rectangle or ellipse — so existing geometry can be reshaped without redrawing; handles use the same magnet and grid snapping. Every shape also carries a wider invisible click zone, so thin strokes and unfilled outlines are easy to grab. Lines, arrows and path points whose ends sit exactly on another shape's anchor stay glued when that shape is moved or resized. |
+| **Properties** | Text content, font size, stroke and fill colors, separate outline/fill opacity, line width, dashed, closed path, rectangle corner radius, rotation, X/Y/W/H, layer order, duplicate and delete. Lines and arrows can be switched between the two kinds. Rectangle, ellipse and closed-path shapes can also carry a centered label with its own size, colour and opacity. |
+| **TikZ code** | Live source for the drawing. Edit it by hand and press **Apply code** to parse it back onto the canvas, or **Regenerate** to replace the text with code generated from the shapes. The status line reports how many shapes were parsed and how many commands are unsupported. |
+
+The canvas is the source of truth until you apply hand-written code: a drawing
+that comes from **Apply code** keeps the exact typed source in the export
+(`drawing.code` is authoritative) even though only the supported subset is
+previewed. Any canvas edit clears that flag and regenerates standard code.
+`Done` saves, `Cancel` discards, and double-clicking a TikZ block or layer
+reopens the editor.
+
+Coordinates on the canvas are millimetres with **y pointing down** (screen
+convention); the generator flips y so the exported picture has y pointing up, as
+TikZ expects. A new content drawing starts at 80×50 mm; a new layer drawing
+starts at 160×90 mm so that 100 % scale covers a 16:9 page.
+
+Labels, transparency and rounding all survive the round trip. A labelled
+rectangle is exported as its `filldraw`/`draw` command followed by a centred
+`\node`; generated labels carry a `name=bxlabel…` marker so **Apply code** folds
+them back into their host shape instead of leaving a loose text shape. Paint
+opacity becomes `draw opacity`, `fill opacity` and `text opacity`, and a rounded
+rectangle becomes `rounded corners=…mm`.
+
 ### Undo, save and autosave
 
 - Undo/redo covers every deck mutation.
@@ -263,7 +360,7 @@ The output is a complete XeLaTeX document. A simplified 16:9 example:
 
 \usepackage{fontspec}
 \usepackage{polyglossia}
-\usepackage{tikz}            % only when image layers are used
+\usepackage{tikz}            % image layers and/or TikZ drawings
 \setmainlanguage{english}
 \setotherlanguage{russian}
 \usefonttheme{professionalfonts}
@@ -286,7 +383,15 @@ The exporter also:
 - Emits each content frame as `\begin{frame}{title}{subtitle}`. Marking the
   subtitle group even when empty is deliberate: Beamer would otherwise swallow
   a leading color-override group into the title.
-- Adds `fragile` to frames containing code.
+- Adds `fragile` to frames containing code, loads `listings` and emits a default
+  `\lstset` (monospaced, wrapped, flexible columns). Each listing carries its
+  dialect and options:
+  `\begin{lstlisting}[breaklines=true,language=Python,numbers=left,numberstyle=\tiny,numbersep=6pt,caption={Example}]`.
+- Declares slide and block font overrides once per distinct family as
+  letter-named macros — `\bxfontA`, `\bxfontB`, … `\bxfontAA` — because TeX
+  control words cannot contain digits. Each declaration is guarded by
+  `\IfFontExistsTF` and falls back to the main font with a package warning, and
+  the slide or block body is wrapped in a local `{ \bxfontA … }` group.
 - Emits custom colors via `\definecolor` / `\setbeamercolor`, bullet and block
   templates only when they differ from the theme defaults, and disables
   navigation symbols when requested.
@@ -302,14 +407,17 @@ xelatex presentation.tex
 The file starts with `% !TeX program = xelatex`. Use **XeLaTeX**, not pdfLaTeX —
 the document uses fontspec and polyglossia. The chosen font must be installed on
 the machine that compiles it; otherwise the export falls back to Latin Modern
-and prints a package warning instead of failing.
+and prints a package warning instead of failing. Slide and block font overrides
+behave the same way: a missing family falls back to the main fallback face and
+emits a `PackageWarning{beamer-editor}` naming the font, so compilation still
+completes.
 
 Background layers need a single run. **Foreground and per-slide layers are
 page-anchored, so run XeLaTeX twice on a fresh compile** — the first run writes
 the page anchors to the `.aux` file and the overlays resolve on the second pass.
 A first-run PDF may show those images off-page; simply run the command again.
 
-### Images, backgrounds, foregrounds and slide layers
+### Images, backgrounds, foregrounds, slide layers and TikZ drawings
 
 Images are embedded in the project JSON but cannot be embedded in LaTeX source.
 Download the referenced files from the export viewer and place them next to the
@@ -370,6 +478,49 @@ XeLaTeX pass described above. Backgrounds, foregrounds and per-slide layers can
 be combined; the three surfaces share the same anchor, size, offset and rotation
 math.
 
+TikZ drawings do not produce files. A content block is emitted as a centered
+picture scaled to its width; the drawing's own size becomes the bounding box:
+
+```latex
+\begin{center}
+  \centering
+  \resizebox{0.60\textwidth}{!}{%
+    \begin{tikzpicture}[x=1mm,y=1mm]
+      \useasboundingbox (0,0) rectangle (80,50);
+      \filldraw[draw=bxtz0,draw opacity=0.5,fill=bxtz1,fill opacity=0.35,
+                rounded corners=2mm] (10,40) rectangle (40,20);
+      \node[anchor=center,inner sep=0pt,name=bxlabel0,text=bxtz2,
+            text opacity=0.9] at (25,30) {Flow};
+    \end{tikzpicture}%
+  }
+  \caption{Signal flow}
+\end{center}
+```
+
+A vector layer becomes one node in the same background or foreground stack as
+the image layers. Its geometry is scaled through the nested picture's unit
+vectors (`x=…mm,y=…mm`) rather than `\resizebox`, because a `\resizebox` around a
+nested `tikzpicture` inside `\usebackgroundtemplate` fails to compile; the
+bounding box is a raw-number rectangle in drawing coordinates:
+
+```latex
+\node[anchor=center,inner sep=0pt,opacity=1.00] at (80.00mm,45.00mm) {%
+  \begin{tikzpicture}[x=0.80mm,y=0.80mm]
+    \useasboundingbox (0,0) rectangle (100,50);
+    ...
+  \end{tikzpicture}%
+};
+```
+
+Foreground vector layers are positioned `at ([xshift=...,yshift=...]current
+page.north west)`, so they follow the same two-run rule as foreground images.
+The parser behind **Apply code** understands `\draw`, `\fill`, `\filldraw`,
+`\path` and `\node` with `--`, `rectangle`, `circle`, `ellipse`,
+`plot coordinates`, named colors, `draw=`, `fill=`, `thick`/`thin`,
+`dashed`, `rounded corners`, `draw`/`fill`/`text opacity`, `rotate=` and font
+sizes. Anything else is kept verbatim in the export but is not previewed, and
+the editor reports how many commands it skipped.
+
 ### Preview fidelity
 
 The editor canvas (960×540 for 16:9, 800×600 for 4:3) is a CSS reconstruction of
@@ -399,6 +550,18 @@ especially before presenting or printing.
   options. Both use percent-of-page coordinates, which is why the manual sliders
   behave identically in the preview and the PDF. Foreground stacks and per-slide
   layers ride in a `shipout/foreground` hook so they stay above all frame content.
+- **Scoped font overrides.** A slide or block may carry a `FontChoice`. The
+  preview wraps the affected DOM in a font-family scope (`display: contents`, so
+  layout is untouched); the exporter deduplicates families, emits one guarded
+  `\newfontfamily` macro per distinct choice and wraps the same content in a
+  local group. Preview and PDF therefore switch fonts at identical boundaries.
+- **TikZ drawing pipeline.** One shape model in millimetres feeds three
+  consumers: an SVG renderer for the live canvas and thumbnails, a deterministic
+  code generator, and a subset parser that maps hand-written TikZ back onto the
+  canvas. `drawing.code` is authoritative when present, so typed code reaches the
+  export verbatim; canvas edits clear it and regenerate. The same drawing can be
+  a content block (a `\resizebox`-wrapped picture in frame flow) or a positioned
+  layer node (scaled unit vectors inside the background/foreground stack).
 - **Robust project I/O.** `parseDeck()` validates and normalizes every field,
   clamps numeric ranges (including rotation to ±180°), migrates legacy image
   shapes (a single image becomes a one-layer stack) and drops malformed blocks
@@ -420,6 +583,8 @@ src/
     DesignPanel.tsx       template, colors, layout and images tabs
     ImageStackCard.tsx    shared stack editor for template and slide layers
     ExportDialog.tsx      LaTeX viewer, copy/download, image downloads
+    TikzEditor.tsx        drawing canvas, shape properties and TikZ code pane
+    tikzEditorStore.ts    modal open/close state and save callback
     imageFile.ts          client-side image resize/encode
     ColorField.tsx        color input control
   render/
@@ -446,11 +611,17 @@ src/
     persistence.ts        localStorage autosave/load
     projectIO.ts          .beamer.json download/open
     blockOps.ts           block tree helpers
+    code.ts               code-language catalog, aliases and listings dialects
     paragraphs.ts         paragraph splitting
     ids.ts                id generation
   export/
     toLatex.ts            XeLaTeX generation, image collection, all image-layer surfaces
     download.ts           blob/text download helpers, slugify
+  tikz/
+    drawing.ts            shape defaults, TikZ code generation, drawing summaries
+    parse.ts              subset parser for hand-written TikZ
+    colors.ts             color normalization and TikZ color names
+    TikzSvg.tsx           SVG renderer used by the canvas and thumbnails
   styles/
     app.css               application, canvas and panel styles
 ```
@@ -465,7 +636,7 @@ src/
 | Math preview | KaTeX 0.16                               |
 | Tests        | Vitest 3                                 |
 | Styling      | Plain CSS with theme-driven CSS variables |
-| Export       | XeLaTeX + fontspec + polyglossia + TikZ  |
+| Export       | XeLaTeX + fontspec + polyglossia + TikZ + listings |
 
 ---
 
@@ -477,21 +648,34 @@ npm run typecheck
 npm run build
 ```
 
-The Vitest suite (143 tests in 6 files) covers theme resolution and color math,
+The Vitest suite (175 tests in 7 files) covers theme resolution and color math,
 image stack resolution and placement math, project validation and legacy
-migration, store operations, and LaTeX output (preamble, frames, blocks, images,
-background templates, foreground overlays and per-slide layers). Layout and image
-layer behavior have additionally been verified by compiling exported decks with
-MiKTeX XeLaTeX in both aspect ratios — running twice for page-anchored overlays —
-and inspecting the resulting PDF pages.
+migration, store operations, TikZ generation/parsing/anchors, and LaTeX output
+(preamble, frames, blocks, code listings, scoped font declarations and groups,
+images, background templates, foreground overlays, per-slide layers and TikZ
+drawings). Layout, image layers and TikZ output have additionally
+been verified by compiling exported decks with MiKTeX XeLaTeX in both aspect
+ratios — running twice for page-anchored overlays — and inspecting the resulting
+PDF pages, with TikZ content and vector layers checked in the browser as well.
 
 ---
 
 ## Notes and limitations
 
 - The preview is an approximation of Beamer, not a pixel-exact renderer.
-- Export targets **XeLaTeX** only. The chosen font must be installed when
-  compiling; otherwise Latin Modern is used with a warning.
+- Export targets **XeLaTeX** only. The chosen font — including slide and block
+  overrides — must be installed when compiling; otherwise Latin Modern is used
+  with a warning.
+- Code highlighting relies on `listings` built-in dialects. Languages without a
+  safe dialect (JavaScript, TypeScript, C#, CSS, JSON, YAML, PowerShell) export
+  as plain monospaced text, as labelled in the language list.
+- The TikZ canvas previews only the supported subset. Hand-written commands
+  outside it are kept in the exported source but do not appear on the canvas.
+- Magnet anchors come from a shape's unrotated bounds, so a rotated shape's
+  snap points stay at its pre-rotation corners and centres.
+- Sticky connections are inferred from exact anchor coincidence: connectors
+  follow a shape while they sit on one of its anchors, and detach as soon as
+  they are dragged off (or the host is edited through hand-written code).
 - Images are not embedded in `.tex` output — download them from the export
   viewer and keep them beside the source file.
 - Decks with foreground or per-slide layers need **two XeLaTeX runs** on a fresh

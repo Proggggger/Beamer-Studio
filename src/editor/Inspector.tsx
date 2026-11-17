@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { blockLabel, findBlock } from '../model/blockOps';
+import { CODE_LANGUAGES, codeLanguage } from '../model/code';
 import { useDeckStore } from '../model/store';
 import type {
   Block,
@@ -8,12 +9,18 @@ import type {
   BlockType,
   Deck,
   DeckMeta,
+  FontChoice,
+  FontId,
 } from '../model/types';
 import { isHexColor } from '../themes/colorMath';
+import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../themes/fonts';
 import { resolveTheme } from '../themes/resolve';
+import { drawingSummary, emptyBlockDrawing } from '../tikz/drawing';
+import { TikzSvg } from '../tikz/TikzSvg';
 import { ColorField } from './ColorField';
 import { readImageFile } from './imageFile';
 import { ImageStackCard } from './ImageStackCard';
+import { openTikzEditor } from './tikzEditorStore';
 
 const BLOCK_TYPES: Array<{ type: BlockType; label: string }> = [
   { type: 'paragraph', label: 'Paragraph' },
@@ -24,6 +31,7 @@ const BLOCK_TYPES: Array<{ type: BlockType; label: string }> = [
   { type: 'math', label: 'Math' },
   { type: 'code', label: 'Code' },
   { type: 'toc', label: 'Table of contents' },
+  { type: 'tikz', label: 'TikZ drawing' },
 ];
 
 const BLOCK_BADGES: Record<BlockType, string> = {
@@ -35,6 +43,7 @@ const BLOCK_BADGES: Record<BlockType, string> = {
   math: '∑',
   code: '{}',
   toc: '☰',
+  tikz: '◈',
 };
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -43,6 +52,69 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="field-label">{label}</span>
       {children}
     </label>
+  );
+}
+
+const FONT_GROUPS = [
+  { label: 'TeX fonts', options: FONT_OPTIONS.filter((option) => option.source === 'tex') },
+  {
+    label: 'Windows system fonts',
+    options: FONT_OPTIONS.filter((option) => option.source === 'system'),
+  },
+  { label: 'Web / Google fonts', options: FONT_OPTIONS.filter((option) => option.source === 'web') },
+];
+
+function FontPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: FontChoice | undefined;
+  onChange: (next: FontChoice | undefined) => void;
+}) {
+  return (
+    <>
+      <Field label={label}>
+        <select
+          value={value?.family ?? ''}
+          onChange={(event) => {
+            const id = event.target.value;
+            if (!id) {
+              onChange(undefined);
+            } else if (id === CUSTOM_FONT_ID) {
+              onChange({ family: CUSTOM_FONT_ID, custom: value?.custom ?? '' });
+            } else {
+              onChange({ family: id as FontId });
+            }
+          }}
+        >
+          <option value="">Inherit from theme</option>
+          {FONT_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+          <option value={CUSTOM_FONT_ID}>Custom family…</option>
+        </select>
+      </Field>
+      {value?.family === CUSTOM_FONT_ID ? (
+        <Field label="Custom family name">
+          <input
+            value={value.custom ?? ''}
+            placeholder="e.g. Bahnschrift"
+            spellCheck={false}
+            onChange={(event) =>
+              onChange({ family: CUSTOM_FONT_ID, custom: event.target.value })
+            }
+          />
+        </Field>
+      ) : null}
+    </>
   );
 }
 
@@ -552,6 +624,77 @@ function BlockEditor({ block }: { block: Extract<Block, { type: 'block' }> }) {
   );
 }
 
+function TikzBlockEditor({ block }: { block: Extract<Block, { type: 'tikz' }> }) {
+  const updateBlock = useDeckStore((state) => state.updateBlock);
+  const patch = (value: Partial<Extract<Block, { type: 'tikz' }>>, key: string) =>
+    updateBlock(
+      block.id,
+      (target) => (target.type === 'tikz' ? { ...target, ...value } : target),
+      key,
+    );
+
+  return (
+    <>
+      <div
+        className="tikz-panel-preview"
+        style={{ aspectRatio: `${block.drawing.width} / ${block.drawing.height}` }}
+      >
+        <TikzSvg drawing={block.drawing} />
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="btn btn-tiny"
+          onClick={() =>
+            openTikzEditor('Edit TikZ drawing', block.drawing, (drawing) =>
+              patch({ drawing }, `tikz:${block.id}`),
+            )
+          }
+        >
+          Edit drawing
+        </button>
+        <button
+          type="button"
+          className="btn btn-tiny btn-danger"
+          onClick={() => patch({ drawing: emptyBlockDrawing() }, `tikz-clear:${block.id}`)}
+        >
+          Clear
+        </button>
+      </div>
+      <Field label="Name">
+        <input
+          value={block.name}
+          spellCheck={false}
+          onChange={(event) => patch({ name: event.target.value }, `tikz-name:${block.id}`)}
+        />
+      </Field>
+      <Field label={`Width · ${block.widthPct}%`}>
+        <input
+          type="range"
+          min={10}
+          max={100}
+          step={1}
+          value={block.widthPct}
+          onChange={(event) =>
+            patch({ widthPct: Number(event.target.value) }, `tikz-width:${block.id}`)
+          }
+        />
+      </Field>
+      <Field label="Caption">
+        <input
+          value={block.caption ?? ''}
+          spellCheck={false}
+          onChange={(event) => patch({ caption: event.target.value }, `tikz-caption:${block.id}`)}
+        />
+      </Field>
+      <p className="muted small">
+        {drawingSummary(block.drawing)} · exports as a resized <code>tikzpicture</code>; double-click
+        the drawing on the slide to edit it.
+      </p>
+    </>
+  );
+}
+
 const TONES: Array<{ tone: BlockTone; label: string; env: string; description: string }> = [
   {
     tone: 'normal',
@@ -580,7 +723,11 @@ function SelectedBlockEditor({ block }: { block: Block }) {
     <section className="panel-section">
       <h3>
         <span className={`block-badge badge-${block.type}`}>{BLOCK_BADGES[block.type]}</span>
-        {block.type === 'toc' ? 'Table of contents' : block.type[0].toUpperCase() + block.type.slice(1)}
+        {block.type === 'toc'
+          ? 'Table of contents'
+          : block.type === 'tikz'
+            ? 'TikZ drawing'
+            : block.type[0].toUpperCase() + block.type.slice(1)}
       </h3>
       {block.type === 'paragraph' ? <ParagraphEditor block={block} /> : null}
       {block.type === 'list' ? <ListEditor block={block} /> : null}
@@ -610,9 +757,8 @@ function SelectedBlockEditor({ block }: { block: Block }) {
       {block.type === 'code' ? (
         <>
           <Field label="Language">
-            <input
+            <select
               value={block.lang}
-              spellCheck={false}
               onChange={(event) =>
                 updateBlock(
                   block.id,
@@ -620,11 +766,17 @@ function SelectedBlockEditor({ block }: { block: Block }) {
                   `code-lang:${block.id}`,
                 )
               }
-            />
+            >
+              {CODE_LANGUAGES.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </Field>
-          <Field label="Code (verbatim)">
+          <Field label="Code">
             <textarea
-              rows={7}
+              rows={8}
               value={block.text}
               spellCheck={false}
               onChange={(event) =>
@@ -636,6 +788,43 @@ function SelectedBlockEditor({ block }: { block: Block }) {
               }
             />
           </Field>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={block.lineNumbers === true}
+              onChange={(event) =>
+                updateBlock(
+                  block.id,
+                  (target) =>
+                    target.type === 'code'
+                      ? { ...target, lineNumbers: event.target.checked }
+                      : target,
+                  `code-numbers:${block.id}`,
+                )
+              }
+            />
+            Line numbers
+          </label>
+          <Field label="Caption">
+            <input
+              value={block.caption ?? ''}
+              spellCheck={false}
+              onChange={(event) =>
+                updateBlock(
+                  block.id,
+                  (target) =>
+                    target.type === 'code' ? { ...target, caption: event.target.value } : target,
+                  `code-caption:${block.id}`,
+                )
+              }
+            />
+          </Field>
+          <p className="muted small">
+            {codeLanguage(block.lang).dialect
+              ? `Highlighted with listings (${codeLanguage(block.lang).dialect}).`
+              : 'Printed in plain monospace; no listings dialect for this language.'}{' '}
+            Frames with code compile as <code>[fragile]</code>.
+          </p>
         </>
       ) : null}
       {block.type === 'toc' ? (
@@ -643,6 +832,24 @@ function SelectedBlockEditor({ block }: { block: Block }) {
           Exports as <code>\tableofcontents</code> and lists every section slide in the deck.
         </p>
       ) : null}
+      {block.type === 'tikz' ? <TikzBlockEditor block={block} /> : null}
+      <div className="panel-subsection">
+        <h4>Font override</h4>
+        <FontPicker
+          label="Block font"
+          value={block.font}
+          onChange={(font) =>
+            updateBlock(
+              block.id,
+              (target) => ({ ...target, font }) as Block,
+              `block-font:${block.id}`,
+            )
+          }
+        />
+        <p className="muted small">
+          Applies to this block only; the export wraps it in a local font group.
+        </p>
+      </div>
     </section>
   );
 }
@@ -744,6 +951,19 @@ function SlideEditor({ deck }: { deck: Deck }) {
             </Field>
           </>
         ) : null}
+        {slide.kind !== 'title' ? (
+          <>
+            <FontPicker
+              label={slide.kind === 'section' ? 'Section font' : 'Content font'}
+              value={slide.font}
+              onChange={(font) => updateSlide(slide.id, { font }, `slide-font:${slide.id}`)}
+            />
+            <p className="muted small">
+              Overrides the theme face for this slide&apos;s{' '}
+              {slide.kind === 'section' ? 'section page' : 'body text'} only.
+            </p>
+          </>
+        ) : null}
         <div className="button-row">
           <button type="button" className="btn btn-tiny" onClick={() => duplicateSlide(slide.id)}>
             Duplicate slide
@@ -791,6 +1011,9 @@ function SlideEditor({ deck }: { deck: Deck }) {
               </button>
               <button type="button" className="btn btn-tiny" onClick={() => addBlock('paragraph')}>
                 + Quick paragraph
+              </button>
+              <button type="button" className="btn btn-tiny" onClick={() => addBlock('code')}>
+                + Quick code
               </button>
               <button
                 type="button"

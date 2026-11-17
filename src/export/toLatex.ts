@@ -1,3 +1,5 @@
+import { walkBlocks } from '../model/blockOps';
+import { listingsDialect } from '../model/code';
 import { splitParagraphs } from '../model/paragraphs';
 import type {
   BackgroundImageSettings,
@@ -6,6 +8,7 @@ import type {
   BlockColorOverrides,
   BlockTone,
   Deck,
+  FontChoice,
   Item,
   Slide,
 } from '../model/types';
@@ -15,6 +18,7 @@ import {
   resolveSlideLayers,
 } from '../themes/backgrounds';
 import { readableOn, shade } from '../themes/colorMath';
+import { num, tikzBody } from '../tikz/drawing';
 import { resolveFont, scriptFallbackChain } from '../themes/fonts';
 import { languageOption, languageScripts } from '../themes/languages';
 import { resolveTheme } from '../themes/resolve';
@@ -73,6 +77,54 @@ function hasCode(blocks: Block[]): boolean {
     if (block.type === 'code') return true;
     if (block.type === 'block') return hasCode(block.body);
     if (block.type === 'columns') return hasCode(block.left) || hasCode(block.right);
+    return false;
+  });
+}
+
+function fontChoiceKey(choice: FontChoice): string {
+  return `${choice.family}\u0000${choice.custom ?? ''}`;
+}
+
+interface FontOverride {
+  key: string;
+  /** LaTeX control sequence declared in the preamble, e.g. bxfontA. */
+  name: string;
+  choice: FontChoice;
+}
+
+/** TeX control words cannot contain digits, so the counter uses letters. */
+function fontMacroName(index: number): string {
+  let letters = '';
+  let value = index;
+  do {
+    letters = String.fromCharCode(65 + (value % 26)) + letters;
+    value = Math.floor(value / 26) - 1;
+  } while (value >= 0);
+  return `bxfont${letters}`;
+}
+
+/** One declaration per distinct slide/block font; the text is grouped locally. */
+function collectFontOverrides(deck: Deck): FontOverride[] {
+  const overrides = new Map<string, FontOverride>();
+  const add = (choice: FontChoice | undefined) => {
+    if (!choice) return;
+    if (choice.family === 'custom' && !choice.custom?.trim()) return;
+    const key = fontChoiceKey(choice);
+    if (overrides.has(key)) return;
+    overrides.set(key, { key, name: fontMacroName(overrides.size), choice });
+  };
+  for (const slide of deck.slides) {
+    add(slide.font);
+    walkBlocks(slide.body, (block) => add(block.font));
+  }
+  return [...overrides.values()];
+}
+
+function hasTikzBlocks(blocks: Block[]): boolean {
+  return blocks.some((block) => {
+    if (block.type === 'tikz') return tikzBody(block.drawing).trim().length > 0;
+    if (block.type === 'block') return hasTikzBlocks(block.body);
+    if (block.type === 'columns') return hasTikzBlocks(block.left) || hasTikzBlocks(block.right);
     return false;
   });
 }
@@ -192,6 +244,84 @@ function nodeRotation(layer: BackgroundImageSettings): string {
   return layer.rotation !== 0 ? `,rotate=${-layer.rotation}` : '';
 }
 
+interface TikzLayerSizing {
+  width: number;
+  height: number;
+  /** Unit-vector lengths for the nested picture, replacing a resizebox. */
+  scaleX: number;
+  scaleY: number;
+  body: string;
+}
+
+/** Mirrors the preview box maths so vector layers land on the same pixels. */
+function tikzLayerSizing(
+  layer: BackgroundImageSettings,
+  paper: { w: number; h: number },
+): TikzLayerSizing | null {
+  const drawing = layer.drawing;
+  if (!drawing || drawing.width <= 0 || drawing.height <= 0) return null;
+  const body = tikzBody(drawing);
+  if (!body.trim()) return null;
+  const aspect = drawing.height / drawing.width;
+  if (layer.mode === 'stretch') {
+    return {
+      width: paper.w,
+      height: paper.h,
+      scaleX: paper.w / drawing.width,
+      scaleY: paper.h / drawing.height,
+      body,
+    };
+  }
+  if (layer.mode === 'fit') {
+    const factor = Math.min(paper.w / drawing.width, paper.h / drawing.height);
+    return {
+      width: drawing.width * factor,
+      height: drawing.height * factor,
+      scaleX: factor,
+      scaleY: factor,
+      body,
+    };
+  }
+  const width = (paper.w * layer.scale) / 100;
+  const factor = width / drawing.width;
+  return {
+    width,
+    height: width * aspect,
+    scaleX: factor,
+    scaleY: factor,
+    body,
+  };
+}
+
+/**
+ * Beamer's background and shipout templates are plain boxes, so `\resizebox`
+ * around the nested picture fails there; scaling the unit vectors instead gives
+ * the same size without a scaling box.
+ */
+function tikzNodeLines(
+  layer: BackgroundImageSettings,
+  at: string,
+  paper: { w: number; h: number },
+  indent: string,
+): string[] | null {
+  const sizing = tikzLayerSizing(layer, paper);
+  const drawing = layer.drawing;
+  if (!sizing || !drawing) return null;
+  const anchor = BACKGROUND_NODE_ANCHORS[layer.position];
+  const lines = [
+    `${indent}\\node[anchor=${anchor},inner sep=0pt,opacity=${(layer.opacity / 100).toFixed(
+      2,
+    )}${nodeRotation(layer)}] at ${at} {%`,
+    `${indent}  \\begin{tikzpicture}[x=${mm(sizing.scaleX)},y=${mm(sizing.scaleY)}]`,
+    `${indent}    \\useasboundingbox (0,0) rectangle (${num(drawing.width)},${num(
+      drawing.height,
+    )});`,
+  ];
+  for (const row of sizing.body.split('\n')) lines.push(`${indent}    ${row}`);
+  lines.push(`${indent}  \\end{tikzpicture}%`, `${indent}};%`);
+  return lines;
+}
+
 /**
  * Replaces beamer's canvas with a solid fill and the layer stack on top.
  * Uses explicit page coordinates instead of tikz's current page, which would
@@ -211,13 +341,18 @@ function backgroundCanvasCommands(
     `    \\fill[bxBackgroundFill] ${pageBox};`,
   ];
   layers.forEach((layer, index) => {
-    const name = names.get(`bg:${slot}:${index}`);
-    if (!name) return;
     const anchor = BACKGROUND_ANCHOR_FRACTIONS[layer.position];
-    const size = imageSizeOptions(layer, paper);
     const x = paper.w * (anchor.x + layer.offsetX / 100);
     // Positive vertical offsets move down on screen, so they subtract from tikz's y.
     const y = paper.h * (1 - anchor.y - layer.offsetY / 100);
+    if (layer.kind === 'tikz') {
+      const vector = tikzNodeLines(layer, `(${mm(x)},${mm(y)})`, paper, '    ');
+      if (vector) commands.push(...vector);
+      return;
+    }
+    const name = names.get(`bg:${slot}:${index}`);
+    if (!name) return;
+    const size = imageSizeOptions(layer, paper);
     commands.push(
       `    \\node[anchor=${BACKGROUND_NODE_ANCHORS[layer.position]},inner sep=0pt,opacity=${(layer.opacity / 100).toFixed(2)}${nodeRotation(layer)}] at (${mm(x)},${mm(y)}) {\\includegraphics[${size}]{${name}}};`,
     );
@@ -255,13 +390,18 @@ function foregroundNodeCommands(
 ): string[] {
   const commands = ['\\renewcommand{\\bxForeground}{%'];
   entries.forEach(({ layer, key }) => {
-    const name = names.get(key);
-    if (!name) return;
     const anchor = BACKGROUND_ANCHOR_FRACTIONS[layer.position];
-    const size = imageSizeOptions(layer, paper);
     const x = paper.w * (anchor.x + layer.offsetX / 100);
     const y = paper.h * (anchor.y + layer.offsetY / 100);
     const shift = `[xshift=${mm(x)},yshift=${mm(y === 0 ? 0 : -y)}]current page.north west`;
+    if (layer.kind === 'tikz') {
+      const vector = tikzNodeLines(layer, `(${shift})`, paper, '  ');
+      if (vector) commands.push(...vector);
+      return;
+    }
+    const name = names.get(key);
+    if (!name) return;
+    const size = imageSizeOptions(layer, paper);
     commands.push(
       `  \\node[anchor=${BACKGROUND_NODE_ANCHORS[layer.position]},inner sep=0pt,opacity=${(layer.opacity / 100).toFixed(2)}${nodeRotation(layer)}] at (${shift}) {\\includegraphics[${size}]{${name}}};%`,
     );
@@ -375,8 +515,11 @@ function renderBlocks(
   level: number,
   imageNames: Map<string, string>,
   wrapText: WrapText,
+  wrapFont: (choice: FontChoice | undefined) => string | null,
 ): void {
   for (const block of blocks) {
+    const fontMacro = wrapFont(block.font);
+    if (fontMacro) lines.push(`${pad(level)}{${fontMacro}`);
     switch (block.type) {
       case 'paragraph': {
         const text = paragraphText(wrapText(block.text), block.indent);
@@ -405,7 +548,7 @@ function renderBlocks(
         );
         if (!hasOverride) {
           lines.push(`${pad(level)}\\begin{${env}}{${wrapText(block.title)}}`);
-          renderBlocks(block.body, lines, level + 1, imageNames, wrapText);
+          renderBlocks(block.body, lines, level + 1, imageNames, wrapText, wrapFont);
           lines.push(`${pad(level)}\\end{${env}}`);
           lines.push('');
           break;
@@ -423,7 +566,7 @@ function renderBlocks(
         const bodySpec = blockColorSet(colors ?? {}, 'body', targets.body, define);
         if (bodySpec) lines.push(`${pad(level + 1)}${bodySpec}`);
         lines.push(`${pad(level + 1)}\\begin{${env}}{${wrapText(block.title)}}`);
-        renderBlocks(block.body, lines, level + 2, imageNames, wrapText);
+        renderBlocks(block.body, lines, level + 2, imageNames, wrapText, wrapFont);
         lines.push(`${pad(level + 1)}\\end{${env}}`);
         lines.push(`${pad(level)}}`);
         lines.push('');
@@ -432,10 +575,10 @@ function renderBlocks(
       case 'columns':
         lines.push(`${pad(level)}\\begin{columns}[T]`);
         lines.push(`${pad(level + 1)}\\begin{column}{0.48\\textwidth}`);
-        renderBlocks(block.left, lines, level + 2, imageNames, wrapText);
+        renderBlocks(block.left, lines, level + 2, imageNames, wrapText, wrapFont);
         lines.push(`${pad(level + 1)}\\end{column}`);
         lines.push(`${pad(level + 1)}\\begin{column}{0.48\\textwidth}`);
-        renderBlocks(block.right, lines, level + 2, imageNames, wrapText);
+        renderBlocks(block.right, lines, level + 2, imageNames, wrapText, wrapFont);
         lines.push(`${pad(level + 1)}\\end{column}`);
         lines.push(`${pad(level)}\\end{columns}`);
         lines.push('');
@@ -464,23 +607,64 @@ function renderBlocks(
         lines.push('');
         break;
       }
+      case 'tikz': {
+        const body = tikzBody(block.drawing);
+        if (!body.trim()) {
+          lines.push(`${pad(level)}% TikZ drawing "${block.name}" has no shapes.`);
+          break;
+        }
+        const width = Math.max(10, Math.min(100, block.widthPct)) / 100;
+        const outer = block.caption ? 'figure' : 'center';
+        lines.push(`${pad(level)}\\begin{${outer}}`);
+        lines.push(`${pad(level + 1)}\\centering`);
+        lines.push(`${pad(level + 1)}\\resizebox{${width.toFixed(2)}\\textwidth}{!}{%`);
+        lines.push(`${pad(level + 2)}\\begin{tikzpicture}[x=1mm,y=1mm]`);
+        lines.push(
+          `${pad(level + 3)}\\useasboundingbox (0,0) rectangle (${mm(
+            block.drawing.width,
+          )},${mm(block.drawing.height)});`,
+        );
+        for (const row of body.split('\n')) lines.push(`${pad(level + 3)}${row}`);
+        lines.push(`${pad(level + 2)}\\end{tikzpicture}%`);
+        lines.push(`${pad(level + 1)}}`);
+        if (block.caption) lines.push(`${pad(level + 1)}\\caption{${wrapText(block.caption)}}`);
+        lines.push(`${pad(level)}\\end{${outer}}`);
+        lines.push('');
+        break;
+      }
       case 'math':
         lines.push(`${pad(level)}\\[`);
         lines.push(`${pad(level + 1)}${block.tex}`);
         lines.push(`${pad(level)}\\]`);
         lines.push('');
         break;
-      case 'code':
-        lines.push(`${pad(level)}\\begin{verbatim}`);
-        for (const row of block.text.split('\n')) lines.push(`${pad(level)}${row}`);
-        lines.push(`${pad(level)}\\end{verbatim}`);
+      case 'code': {
+        const options = ['breaklines=true'];
+        const dialect = listingsDialect(block.lang);
+        if (dialect) options.push(`language=${dialect}`);
+        if (block.lineNumbers) {
+          options.push('numbers=left', 'numberstyle=\\tiny', 'numbersep=6pt');
+        }
+        if (block.caption) {
+          // Listings resets to the main font for captions, so carry the block
+          // font override inside the caption group to keep it visible.
+          const text = wrapText(block.caption);
+          options.push(`caption={${fontMacro ? `{${fontMacro} ${text}}` : text}}`);
+        }
+        lines.push(`${pad(level)}\\begin{lstlisting}[${options.join(',')}]`);
+        // Indenting code rows or the end tag adds visible spaces and even an
+        // extra numbered line, so listing content stays flush left.
+        for (const row of block.text.split('\n')) lines.push(row);
+        lines.push('\\end{lstlisting}');
         lines.push('');
         break;
+      }
       case 'toc':
         lines.push(`${pad(level)}\\tableofcontents`);
         lines.push('');
         break;
     }
+    if (fontMacro) lines.push(`${pad(level)}}`);
   }
 }
 
@@ -490,6 +674,7 @@ function renderSlide(
   imageNames: Map<string, string>,
   wrapText: WrapText,
   wrapTitle: WrapText,
+  wrapFont: (choice: FontChoice | undefined) => string | null,
 ): void {
   if (slide.kind === 'title') {
     lines.push('\\begin{frame}[plain]');
@@ -499,10 +684,13 @@ function renderSlide(
     return;
   }
 
+  const slideFont = wrapFont(slide.font);
   if (slide.kind === 'section') {
     lines.push(`\\section{${wrapTitle(slide.title)}}`);
     lines.push('\\begin{frame}');
+    if (slideFont) lines.push(`${pad(1)}{${slideFont}`);
     lines.push(`${pad(1)}\\sectionpage`);
+    if (slideFont) lines.push(`${pad(1)}}`);
     lines.push('\\end{frame}');
     lines.push('');
     return;
@@ -516,7 +704,9 @@ function renderSlide(
   lines.push(
     `\\begin{frame}${options}{${wrapTitle(slide.title)}}{${wrapTitle(slide.subtitle ?? '')}}`,
   );
-  renderBlocks(slide.body, lines, 1, imageNames, wrapText);
+  if (slideFont) lines.push(`${pad(1)}{${slideFont}`);
+  renderBlocks(slide.body, lines, 1, imageNames, wrapText, wrapFont);
+  if (slideFont) lines.push(`${pad(1)}}`);
   lines.push('\\end{frame}');
   lines.push('');
 }
@@ -548,6 +738,8 @@ export function toLatex(deck: Deck): string {
     (['all', 'title', 'section'] as const).some(
       (slot) => theme.foregrounds[slot].length > 0,
     ) || deck.slides.some((slide) => slide.images.length > 0);
+  const hasCodeBlocks = deck.slides.some((slide) => hasCode(slide.body));
+  const fontOverrides = collectFontOverrides(deck);
 
   lines.push('% !TeX program = xelatex');
   if (deck.aspect === '169') {
@@ -571,7 +763,19 @@ export function toLatex(deck: Deck): string {
 
   lines.push('\\usepackage{fontspec}');
   lines.push('\\usepackage{polyglossia}');
-  if (hasBackgrounds || hasForegrounds) lines.push('\\usepackage{tikz}');
+  const hasTikz = deck.slides.some((slide) => hasTikzBlocks(slide.body));
+  if (hasBackgrounds || hasForegrounds || hasTikz) lines.push('\\usepackage{tikz}');
+  if (hasCodeBlocks) {
+    lines.push('\\usepackage{listings}');
+    lines.push('\\lstset{%');
+    lines.push('  basicstyle=\\ttfamily\\footnotesize,');
+    lines.push('  breaklines=true,');
+    lines.push('  columns=fullflexible,');
+    lines.push('  keepspaces=true,');
+    lines.push('  showstringspaces=false,');
+    lines.push('  tabsize=2,');
+    lines.push('}');
+  }
   lines.push(`\\setmainlanguage{${languageOption(settings.mainLanguage).tex}}`);
   for (const id of settings.otherLanguages) {
     lines.push(`\\setotherlanguage{${languageOption(id).tex}}`);
@@ -592,6 +796,18 @@ export function toLatex(deck: Deck): string {
   lines.push('}');
   const mono = font.monoTex ?? 'Latin Modern Mono';
   lines.push(`\\IfFontExistsTF{${mono}}{\\setmonofont{${mono}}}{}`);
+
+  for (const override of fontOverrides) {
+    const choiceFont = resolveFont(override.choice.family, override.choice.custom ?? '');
+    lines.push(`\\IfFontExistsTF{${choiceFont.tex}}{%`);
+    lines.push(`  \\newfontfamily\\${override.name}{${choiceFont.tex}}%`);
+    lines.push('}{%');
+    lines.push(
+      `  \\PackageWarning{beamer-editor}{Font "${choiceFont.tex}" is not installed; using ${latinFallback}}%`,
+    );
+    lines.push(`  \\newfontfamily\\${override.name}{${latinFallback}}%`);
+    lines.push('}');
+  }
 
   if (scripts.has('greek') || scripts.has('cyrillic')) {
     // Script fonts need explicit declarations under fontspec. Prefer the face
@@ -709,6 +925,12 @@ export function toLatex(deck: Deck): string {
   const wrapText: WrapText = (value) => wrapScriptRuns(value, scriptWrap);
   // Titles also feed PDF bookmarks/metadata, where language commands are illegal.
   const wrapTitle: WrapText = (value) => wrapScriptRuns(value, scriptWrap, true);
+  const fontMacros = new Map(fontOverrides.map((entry) => [entry.key, entry.name]));
+  const wrapFont = (choice: FontChoice | undefined): string | null => {
+    if (!choice) return null;
+    const name = fontMacros.get(fontChoiceKey(choice));
+    return name ? `\\${name}` : null;
+  };
 
   lines.push('');
   lines.push(`\\title{${wrapTitle(deck.meta.title)}}`);
@@ -763,7 +985,7 @@ export function toLatex(deck: Deck): string {
         appliedBackground = key;
       }
     }
-    renderSlide(slide, lines, imageNames, wrapText, wrapTitle);
+    renderSlide(slide, lines, imageNames, wrapText, wrapTitle, wrapFont);
   }
 
   lines.push('\\end{document}');

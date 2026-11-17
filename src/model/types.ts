@@ -93,6 +93,13 @@ export type FontId =
   | 'source-serif-pro'
   | 'custom';
 
+/** Per-slide or per-block font override; omitted means inherit the theme face. */
+export interface FontChoice {
+  family: FontId;
+  /** Family name typed by the user when family is 'custom'. */
+  custom?: string;
+}
+
 export type LanguageId =
   | 'english'
   | 'german'
@@ -147,9 +154,70 @@ export type BackgroundPosition =
 
 export type BackgroundSizeMode = 'scale' | 'fit' | 'stretch';
 
+export interface TikzPoint {
+  x: number;
+  y: number;
+}
+
+export type TikzShapeKind = 'line' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'path';
+
+/**
+ * One primitive in a TikZ picture. Coordinates are millimetres in editor
+ * space (y grows down); the exporter flips y for TikZ's y-up axes.
+ */
+export interface TikzShape {
+  id: string;
+  kind: TikzShapeKind;
+  x: number;
+  y: number;
+  /** End point of line/arrow and the opposite corner of rect/ellipse. */
+  x2?: number;
+  y2?: number;
+  /** Polyline for kind 'path', already including start and end. */
+  points?: TikzPoint[];
+  text?: string;
+  /** Text size in millimetres (1mm = 2.845pt in the export). */
+  fontSize?: number;
+  /** Text colour for a label attached to a shape; defaults to black. */
+  textColor?: string;
+  /** Clockwise rotation in degrees. */
+  rotation?: number;
+  /** Hex stroke colour; 'none' draws no outline. */
+  stroke?: string;
+  /** Hex fill colour; omitted means no fill. */
+  fill?: string;
+  /** Outline width in millimetres. */
+  strokeWidth?: number;
+  /** Rect only: rounded-corner radius in millimetres. */
+  cornerRadius?: number;
+  /** Paint opacity, 0–100; omitted means fully opaque. */
+  strokeOpacity?: number;
+  fillOpacity?: number;
+  textOpacity?: number;
+  dashed?: boolean;
+  /** Path only: close the polyline with `-- cycle`. */
+  closed?: boolean;
+  /** Path only: add an arrow tip at the end. */
+  arrow?: boolean;
+}
+
+export interface TikzDrawing {
+  /** Drawing canvas size in millimetres. */
+  width: number;
+  height: number;
+  shapes: TikzShape[];
+  /**
+   * Authoritative source typed in code mode. Canvas edits overwrite it with
+   * generated code, so preview and export always agree.
+   */
+  code?: string;
+}
+
 export interface BackgroundImageSettings {
   id: string;
-  /** Data URL of the uploaded image. */
+  /** 'tikz' layers carry a drawing instead of an uploaded image. */
+  kind?: 'image' | 'tikz';
+  /** Data URL of the uploaded image; empty for TikZ layers. */
   src: string;
   name: string;
   /** 0–100, where 100 is fully opaque. */
@@ -163,6 +231,7 @@ export interface BackgroundImageSettings {
   offsetY: number;
   /** Clockwise rotation in degrees around the anchor, -180 to 180. */
   rotation: number;
+  drawing?: TikzDrawing;
 }
 
 /**
@@ -225,6 +294,7 @@ export interface ParagraphBlock {
   align?: 'left' | 'center' | 'right';
   /** First-line indent in em, matching `\hspace*{...}` in the export. */
   indent?: number;
+  font?: FontChoice;
 }
 
 export interface ListBlock {
@@ -232,6 +302,7 @@ export interface ListBlock {
   type: 'list';
   ordered: boolean;
   items: Item[];
+  font?: FontChoice;
 }
 
 export type BlockTone = 'normal' | 'alert' | 'example';
@@ -251,6 +322,7 @@ export interface BlockBlock {
   body: Block[];
   /** Local overrides, exported inside a LaTeX group with the block. */
   colors?: BlockColorOverrides;
+  font?: FontChoice;
 }
 
 export interface ColumnsBlock {
@@ -258,6 +330,7 @@ export interface ColumnsBlock {
   type: 'columns';
   left: Block[];
   right: Block[];
+  font?: FontChoice;
 }
 
 export interface ImageBlock {
@@ -267,24 +340,43 @@ export interface ImageBlock {
   name: string;
   widthPct: number;
   caption?: string;
+  font?: FontChoice;
 }
 
 export interface MathBlock {
   id: string;
   type: 'math';
   tex: string;
+  font?: FontChoice;
 }
 
 export interface CodeBlock {
   id: string;
   type: 'code';
+  /** Id from the code-language catalog, e.g. 'python' or 'text'. */
   lang: string;
   text: string;
+  /** Listing caption shown below the code; omit for no caption. */
+  caption?: string;
+  /** Print line numbers in the margin. */
+  lineNumbers?: boolean;
+  font?: FontChoice;
 }
 
 export interface TocBlock {
   id: string;
   type: 'toc';
+  font?: FontChoice;
+}
+
+export interface TikzBlock {
+  id: string;
+  type: 'tikz';
+  name: string;
+  widthPct: number;
+  caption?: string;
+  drawing: TikzDrawing;
+  font?: FontChoice;
 }
 
 export type Block =
@@ -295,7 +387,8 @@ export type Block =
   | ImageBlock
   | MathBlock
   | CodeBlock
-  | TocBlock;
+  | TocBlock
+  | TikzBlock;
 
 export type BlockType = Block['type'];
 
@@ -308,6 +401,8 @@ export interface Slide {
   body: Block[];
   /** Positioned image layers drawn above this slide only, on top of template foregrounds. */
   images: BackgroundImageSettings[];
+  /** Body/section text font for this slide; omitted means inherit the theme face. */
+  font?: FontChoice;
 }
 
 export interface Deck {

@@ -51,6 +51,7 @@ export function newBackground(
 ): BackgroundImageSettings {
   return {
     id: uid(prefix),
+    kind: 'image',
     src,
     name,
     opacity: 100,
@@ -60,6 +61,78 @@ export function newBackground(
     offsetX: 0,
     offsetY: 0,
     rotation: 0,
+  };
+}
+
+export function newTikzLayer(
+  drawing: BackgroundImageSettings['drawing'],
+  prefix: 'bg' | 'fg' | 'fs' = 'fs',
+  name = 'TikZ drawing',
+): BackgroundImageSettings {
+  return {
+    id: uid(prefix),
+    kind: 'tikz',
+    src: '',
+    name,
+    opacity: 100,
+    mode: 'scale',
+    scale: 100,
+    position: 'center',
+    offsetX: 0,
+    offsetY: 0,
+    rotation: 0,
+    drawing,
+  };
+}
+
+export interface TikzLayerBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** True when the SVG should distort to fill the box (stretch mode). */
+  stretch: boolean;
+  rotationOrigin: string;
+}
+
+/**
+ * Mirrors the image layer CSS maths for vector drawings: scale keeps the
+ * drawing aspect at a width percentage, fit contains it in the page and
+ * stretch distorts it to the page.
+ */
+export function tikzLayerBox(
+  layer: BackgroundImageSettings,
+  pageWidth: number,
+  pageHeight: number,
+): TikzLayerBox | null {
+  const drawing = layer.drawing;
+  if (!drawing || drawing.width <= 0 || drawing.height <= 0) return null;
+  const aspect = drawing.height / drawing.width;
+  let width: number;
+  let height: number;
+  let stretch = false;
+  if (layer.mode === 'stretch') {
+    width = pageWidth;
+    height = pageHeight;
+    stretch = true;
+  } else if (layer.mode === 'fit') {
+    const factor = Math.min(pageWidth / drawing.width, pageHeight / drawing.height);
+    width = drawing.width * factor;
+    height = drawing.height * factor;
+  } else {
+    width = (pageWidth * layer.scale) / 100;
+    height = width * aspect;
+  }
+  const anchor = BACKGROUND_ANCHOR_FRACTIONS[layer.position];
+  const shiftX = (layer.offsetX / 100) * pageWidth;
+  const shiftY = (layer.offsetY / 100) * pageHeight;
+  return {
+    left: anchor.x * (pageWidth - width) + shiftX,
+    top: anchor.y * (pageHeight - height) + shiftY,
+    width,
+    height,
+    stretch,
+    rotationOrigin: backgroundRotationOrigin(layer, pageWidth, pageHeight),
   };
 }
 

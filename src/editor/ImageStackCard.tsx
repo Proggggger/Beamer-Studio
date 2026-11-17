@@ -4,7 +4,11 @@ import {
   BACKGROUND_MODES,
   BACKGROUND_POSITIONS,
   newBackground,
+  newTikzLayer,
 } from '../themes/backgrounds';
+import { emptyLayerDrawing } from '../tikz/drawing';
+import { TikzSvg } from '../tikz/TikzSvg';
+import { openTikzEditor } from './tikzEditorStore';
 import { readImageFile } from './imageFile';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -64,6 +68,20 @@ export function ImageStackCard({
     onChange(layers.map((layer) => (layer.id === selected.id ? { ...layer, ...patch } : layer)));
   };
 
+  const addTikz = () => {
+    openTikzEditor('New TikZ layer', emptyLayerDrawing(), (drawing) => {
+      const layer = newTikzLayer(drawing, prefix);
+      setSelectedId(layer.id);
+      onChange([...layers, layer]);
+    });
+  };
+
+  const editTikz = (layer: BackgroundImageSettings) => {
+    openTikzEditor('Edit TikZ layer', layer.drawing ?? emptyLayerDrawing(), (drawing) =>
+      onChange(layers.map((entry) => (entry.id === layer.id ? { ...entry, drawing } : entry))),
+    );
+  };
+
   const remove = (id: string) => {
     const next = layers.filter((layer) => layer.id !== id);
     if (selectedId === id) setSelectedId(next[0]?.id ?? null);
@@ -98,7 +116,11 @@ export function ImageStackCard({
                 onClick={() => setSelectedId(layer.id)}
               >
                 <div className="bg-layer-thumb">
-                  <img src={layer.src} alt="" />
+                  {layer.kind === 'tikz' && layer.drawing ? (
+                    <TikzSvg drawing={layer.drawing} className="bg-layer-svg" />
+                  ) : (
+                    <img src={layer.src} alt="" />
+                  )}
                 </div>
                 <div className="bg-layer-text">
                   <span className="bg-name" title={layer.name}>
@@ -219,11 +241,19 @@ export function ImageStackCard({
                   onChange={(event) => update({ rotation: Number(event.target.value) })}
                 />
               </Field>
+              {selected.kind === 'tikz' ? (
+                <button type="button" className="btn btn-tiny" onClick={() => editTikz(selected)}>
+                  Edit drawing
+                </button>
+              ) : null}
             </>
           ) : null}
           <div className="bg-row">
             <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
               {busy ? 'Reading…' : 'Add image'}
+            </button>
+            <button type="button" className="btn btn-tiny" onClick={addTikz}>
+              Add TikZ
             </button>
             {onReset && resetLabel ? (
               <button type="button" className="btn btn-tiny" onClick={onReset}>
@@ -238,6 +268,9 @@ export function ImageStackCard({
           <div className="bg-row">
             <button type="button" className="btn btn-tiny" onClick={() => fileRef.current?.click()}>
               {busy ? 'Reading…' : 'Choose image'}
+            </button>
+            <button type="button" className="btn btn-tiny" onClick={addTikz}>
+              TikZ drawing
             </button>
           </div>
         </>

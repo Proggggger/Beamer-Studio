@@ -1,3 +1,4 @@
+import { cloneDrawing, emptyBlockDrawing } from '../tikz/drawing';
 import { uid } from './ids';
 import type { Block, BlockType, Item, ListBlock } from './types';
 
@@ -32,9 +33,23 @@ export function createBlock(type: BlockType): Block {
     case 'math':
       return { id: uid('block'), type, tex: 'E = mc^2' };
     case 'code':
-      return { id: uid('block'), type, lang: 'python', text: 'print("Hello, Beamer!")' };
+      return {
+        id: uid('block'),
+        type,
+        lang: 'python',
+        text: 'print("Hello, Beamer!")',
+        lineNumbers: false,
+      };
     case 'toc':
       return { id: uid('block'), type };
+    case 'tikz':
+      return {
+        id: uid('block'),
+        type,
+        name: 'TikZ drawing',
+        widthPct: 70,
+        drawing: emptyBlockDrawing(),
+      };
   }
 }
 
@@ -220,6 +235,8 @@ export function cloneBlock(block: Block): Block {
       return { ...block, id, body: cloneBlocks(block.body) };
     case 'columns':
       return { ...block, id, left: cloneBlocks(block.left), right: cloneBlocks(block.right) };
+    case 'tikz':
+      return { ...block, id, drawing: cloneDrawing(block.drawing) };
     case 'paragraph':
     case 'image':
     case 'math':
@@ -251,5 +268,7 @@ export function blockLabel(block: Block): string {
       return `${block.lang || 'text'} code`;
     case 'toc':
       return 'Table of contents';
+    case 'tikz':
+      return block.name || 'TikZ drawing';
   }
 }

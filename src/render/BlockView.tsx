@@ -1,8 +1,12 @@
 import type { MouseEvent } from 'react';
+import { codeLanguage } from '../model/code';
 import { splitParagraphs } from '../model/paragraphs';
 import { useDeckStore } from '../model/store';
-import type { Block, Deck, ImageBlock, ListBlock } from '../model/types';
+import type { Block, Deck, ImageBlock, ListBlock, TikzBlock } from '../model/types';
+import { resolveFont } from '../themes/fonts';
 import type { ResolvedTheme } from '../themes/resolve';
+import { openTikzEditor } from '../editor/tikzEditorStore';
+import { TikzSvg } from '../tikz/TikzSvg';
 import { EditableText } from './EditableText';
 import { Inline, MathView } from './inline';
 
@@ -218,6 +222,47 @@ function ImageView({ block, context }: { block: ImageBlock; context: RenderConte
   );
 }
 
+function TikzBlockView({ block, context }: { block: TikzBlock; context: RenderContext }) {
+  const updateBlock = useDeckStore((state) => state.updateBlock);
+  const selectBlock = useDeckStore((state) => state.selectBlock);
+  const empty = block.drawing.shapes.length === 0 && !block.drawing.code?.trim();
+  return (
+    <div
+      className={`bx-tikz-block${context.selectedBlockId === block.id ? ' is-selected' : ''}`}
+      onClick={selectHandler(block.id, context.editable, selectBlock)}
+      onDoubleClick={(event) => {
+        if (!context.editable) return;
+        event.stopPropagation();
+        openTikzEditor('Edit TikZ drawing', block.drawing, (drawing) =>
+          updateBlock(
+            block.id,
+            (target) => (target.type === 'tikz' ? { ...target, drawing } : target),
+            `tikz:${block.id}`,
+          ),
+        );
+      }}
+      data-block-id={block.id}
+    >
+      {empty ? (
+        <div className="bx-tikz-empty">
+          Empty drawing — edit this block in the inspector to open the TikZ canvas.
+        </div>
+      ) : (
+        <div
+          className="tikz-frame"
+          style={{
+            width: `${Math.max(10, Math.min(100, block.widthPct))}%`,
+            aspectRatio: `${block.drawing.width} / ${block.drawing.height}`,
+          }}
+        >
+          <TikzSvg drawing={block.drawing} />
+        </div>
+      )}
+      {block.caption ? <div className="bx-tikz-caption">{block.caption}</div> : null}
+    </div>
+  );
+}
+
 function MathBlockView({
   block,
   context,
@@ -261,22 +306,33 @@ function CodeBlockView({
 }) {
   const updateBlock = useDeckStore((state) => state.updateBlock);
   const selectBlock = useDeckStore((state) => state.selectBlock);
+  const language = codeLanguage(block.lang);
+  const renderCode = (value: string) => {
+    const code = block.lineNumbers
+      ? value
+          .split('\n')
+          .map((line, index) => `${String(index + 1).padStart(2, ' ')}  ${line}`)
+          .join('\n')
+      : value;
+    return (
+      <pre className={`bx-code${block.lineNumbers ? ' has-numbers' : ''}`}>
+        <code>{code}</code>
+      </pre>
+    );
+  };
   return (
     <div
       className={`bx-code-block${context.selectedBlockId === block.id ? ' is-selected' : ''}`}
       onClick={selectHandler(block.id, context.editable, selectBlock)}
       data-block-id={block.id}
     >
+      {language.id !== 'text' ? <div className="bx-code-lang">{language.label}</div> : null}
       <EditableText
         editable={context.editable}
         value={block.text}
         multiline
         className="bx-code-source"
-        render={(value) => (
-          <pre className="bx-code">
-            <code>{value}</code>
-          </pre>
-        )}
+        render={renderCode}
         onChange={(text) =>
           updateBlock(
             block.id,
@@ -286,6 +342,7 @@ function CodeBlockView({
         }
         onSelect={() => selectBlock(block.id)}
       />
+      {block.caption ? <div className="bx-code-caption">{block.caption}</div> : null}
     </div>
   );
 }
@@ -315,7 +372,7 @@ function TocView({ block, context }: { block: Extract<Block, { type: 'toc' }>; c
   );
 }
 
-export function BlockView({ block, ...context }: BlockViewProps) {
+function BlockContent({ block, ...context }: BlockViewProps) {
   const updateBlock = useDeckStore((state) => state.updateBlock);
   const selectBlock = useDeckStore((state) => state.selectBlock);
   const selected = context.editable && context.selectedBlockId === block.id;
@@ -380,7 +437,19 @@ export function BlockView({ block, ...context }: BlockViewProps) {
       return <CodeBlockView block={block} context={context} />;
     case 'toc':
       return <TocView block={block} context={context} />;
+    case 'tikz':
+      return <TikzBlockView block={block} context={context} />;
   }
+}
+
+export function BlockView({ block, ...context }: BlockViewProps) {
+  if (!block.font) return <BlockContent block={block} {...context} />;
+  const font = resolveFont(block.font.family, block.font.custom ?? '');
+  return (
+    <div className="bx-font-scope" style={{ fontFamily: font.css }}>
+      <BlockContent block={block} {...context} />
+    </div>
+  );
 }
 
 export function BlockList({ blocks, context }: { blocks: Block[]; context: RenderContext }) {

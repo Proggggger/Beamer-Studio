@@ -324,13 +324,60 @@ describe('toLatex slides', () => {
     expect(untitled).toContain('\\begin{frame}{}{}');
   });
 
-  it('marks frames containing code as fragile', () => {
-    const body: Block[] = [{ id: 'c', type: 'code', lang: 'ts', text: 'const a = 1;' }];
+  it('marks frames containing code as fragile and exports a listing', () => {
+    const body: Block[] = [
+      {
+        id: 'c',
+        type: 'code',
+        lang: 'python',
+        text: 'const a = 1;',
+        caption: 'Example',
+        lineNumbers: true,
+      },
+    ];
     const tex = toLatex(deck({ slides: [frame(body, { title: 'Code' })] }));
+    expect(tex).toContain('\\usepackage{listings}');
     expect(tex).toContain('\\begin{frame}[fragile]{Code}{}');
-    expect(tex).toContain('\\begin{verbatim}');
+    expect(tex).toContain(
+      '\\begin{lstlisting}[breaklines=true,language=Python,numbers=left,numberstyle=\\tiny,numbersep=6pt,caption={Example}]',
+    );
     expect(tex).toContain('const a = 1;');
-    expect(tex).toContain('\\end{verbatim}');
+    expect(tex).toContain('\\end{lstlisting}');
+    expect(tex).not.toContain('\\begin{verbatim}');
+  });
+
+  it('omits the listings language for catalogs without a dialect', () => {
+    const body: Block[] = [{ id: 'c', type: 'code', lang: 'typescript', text: 'let x = 1;' }];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toContain('\\begin{lstlisting}[breaklines=true]');
+    expect(tex).not.toContain('language=');
+  });
+
+  it('declares per-slide and per-block fonts and wraps their content', () => {
+    const body: Block[] = [
+      {
+        id: 'p',
+        type: 'paragraph',
+        text: 'Body text',
+        font: { family: 'tex-gyre-pagella' },
+      },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body, { font: { family: 'tex-gyre-heros' } })] }));
+    expect(tex).toContain('\\IfFontExistsTF{TeX Gyre Heros}{%');
+    expect(tex).toContain('\\newfontfamily\\bxfontA{TeX Gyre Heros}%');
+    expect(tex).toContain('\\IfFontExistsTF{TeX Gyre Pagella}{%');
+    expect(tex).toContain('\\newfontfamily\\bxfontB{TeX Gyre Pagella}%');
+    expect(tex).toContain('  {\\bxfontA\n  {\\bxfontB\n  Body text');
+  });
+
+  it('reuses one declaration for identical font overrides', () => {
+    const font = { family: 'tex-gyre-heros' as const };
+    const body: Block[] = [
+      { id: 'p1', type: 'paragraph', text: 'One', font },
+      { id: 'p2', type: 'paragraph', text: 'Two', font },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body, { font })] }));
+    expect(tex.match(/\\IfFontExistsTF\{TeX Gyre Heros\}/g)).toHaveLength(1);
   });
 
   it('nests itemize environments for item depths and emits \\pause', () => {
@@ -866,5 +913,103 @@ describe('sample deck export', () => {
     expect(tex).toContain('\\section{Customization}');
     expect(tex).toContain('\\begin{columns}[T]');
     expect(tex).toContain('\\begin{alertblock}{Clean export}');
+  });
+});
+
+describe('tikz drawings', () => {
+  const drawing = {
+    width: 80,
+    height: 50,
+    shapes: [
+      { id: 'r1', kind: 'rect' as const, x: 10, y: 10, x2: 40, y2: 30 },
+      {
+        id: 't1',
+        kind: 'text' as const,
+        x: 40,
+        y: 44,
+        text: 'A & B',
+        fontSize: 4,
+      },
+    ],
+  };
+
+  it('exports a TikZ content block as a centered resized picture', () => {
+    const tex = toLatex(
+      deck({
+        slides: [
+          frame([
+            {
+              id: 'tz1',
+              type: 'tikz',
+              name: 'Chart',
+              widthPct: 60,
+              drawing,
+            },
+          ]),
+        ],
+      }),
+    );
+    expect(tex).toContain('\\usepackage{tikz}');
+    expect(tex).toContain('\\begin{center}');
+    expect(tex).toContain('\\resizebox{0.60\\textwidth}{!}{%');
+    expect(tex).toContain('\\begin{tikzpicture}[x=1mm,y=1mm]');
+    expect(tex).toContain('\\useasboundingbox (0,0) rectangle (80.00mm,50.00mm);');
+    expect(tex).toContain('rectangle (40,20);');
+    expect(tex).toContain('{A \\& B};');
+    expect(tex).not.toContain('\\includegraphics');
+  });
+
+  it('skips empty drawings and only loads tikz when something is drawn', () => {
+    const empty = toLatex(deck());
+    expect(empty).not.toContain('\\usepackage{tikz}');
+    const blank = toLatex(
+      deck({
+        slides: [
+          frame([
+            {
+              id: 'tz1',
+              type: 'tikz',
+              name: 'Blank',
+              widthPct: 70,
+              drawing: { width: 80, height: 50, shapes: [] },
+            },
+          ]),
+        ],
+      }),
+    );
+    expect(blank).not.toContain('\\usepackage{tikz}');
+    expect(blank).toContain('% TikZ drawing "Blank" has no shapes.');
+  });
+
+  it('wraps vector layers in a positioned resizebox node', () => {
+    const layer = {
+      id: 'bg-tz',
+      kind: 'tikz' as const,
+      src: '',
+      name: 'Vector',
+      opacity: 100,
+      mode: 'scale' as const,
+      scale: 50,
+      position: 'center' as const,
+      offsetX: 0,
+      offsetY: 0,
+      rotation: 0,
+      drawing: { width: 100, height: 50, shapes: drawing.shapes },
+    };
+    const tex = toLatex(
+      deck({
+        theme: { ...DEFAULT_THEME, backgrounds: { all: [layer], title: [], section: [] } },
+        slides: [frame([])],
+      }),
+    );
+    expect(tex).toContain(
+      '\\node[anchor=center,inner sep=0pt,opacity=1.00] at (80.00mm,45.00mm) {%',
+    );
+    expect(tex).toContain('\\begin{tikzpicture}[x=0.80mm,y=0.80mm]');
+    expect(tex).toContain('\\useasboundingbox (0,0) rectangle (100,50);');
+    expect(tex).not.toContain('\\resizebox');
+    expect(collectImages(deck({
+      theme: { ...DEFAULT_THEME, backgrounds: { all: [layer], title: [], section: [] } },
+    }))).toEqual([]);
   });
 });

@@ -7,12 +7,15 @@ import {
   backgroundRotationOrigin,
   backgroundSizeCss,
   resolveSlideLayers,
+  tikzLayerBox,
 } from '../themes/backgrounds';
 import { mix, TRANSPARENT } from '../themes/colorMath';
+import { resolveFont } from '../themes/fonts';
 import { BlockList } from './BlockView';
 import { EditableText } from './EditableText';
 import { FrameChrome, frameGeometry } from './SlideChrome';
 import { TitlePage } from './TitlePage';
+import { TikzSvg } from '../tikz/TikzSvg';
 
 export interface SlideCanvasProps {
   deck: Deck;
@@ -71,6 +74,9 @@ function SectionPage({
           left: geometry.titleLeft,
           right: page.w - geometry.titleRight,
           bottom: geometry.footerHeight,
+          fontFamily: slide.font
+            ? resolveFont(slide.font.family, slide.font.custom ?? '').css
+            : undefined,
         }}
       >
         <div className="bx-section-spacer" style={{ flex: 2 }} />
@@ -186,6 +192,9 @@ function FramePage({
           left: geometry.contentLeft,
           width: geometry.contentRight - geometry.contentLeft,
           height: geometry.contentBottom - geometry.contentTop - subtitleDelta,
+          fontFamily: slide.font
+            ? resolveFont(slide.font.family, slide.font.custom ?? '').css
+            : undefined,
         }}
       >
         {slide.body.length === 0 ? (
@@ -221,20 +230,43 @@ function ImageLayers({
 }) {
   return (
     <div className={className} aria-hidden>
-      {layers.map((layer) => (
-        <div
-          key={layer.id}
-          className={`${className}-layer`}
-          style={{
-            backgroundImage: `url("${layer.src}")`,
-            backgroundSize: backgroundSizeCss(layer),
-            backgroundPosition: backgroundPlacementCss(layer, pageWidth, pageHeight),
-            opacity: layer.opacity / 100,
-            transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
-            transformOrigin: backgroundRotationOrigin(layer, pageWidth, pageHeight),
-          }}
-        />
-      ))}
+      {layers.map((layer) => {
+        if (layer.kind === 'tikz') {
+          const box = tikzLayerBox(layer, pageWidth, pageHeight);
+          if (!box || !layer.drawing) return null;
+          return (
+            <div
+              key={layer.id}
+              className={`${className}-layer ${className}-vector`}
+              style={{
+                left: box.left,
+                top: box.top,
+                width: box.width,
+                height: box.height,
+                opacity: layer.opacity / 100,
+                transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
+                transformOrigin: box.rotationOrigin,
+              }}
+            >
+              <TikzSvg drawing={layer.drawing} stretch={box.stretch} />
+            </div>
+          );
+        }
+        return (
+          <div
+            key={layer.id}
+            className={`${className}-layer`}
+            style={{
+              backgroundImage: `url("${layer.src}")`,
+              backgroundSize: backgroundSizeCss(layer),
+              backgroundPosition: backgroundPlacementCss(layer, pageWidth, pageHeight),
+              opacity: layer.opacity / 100,
+              transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
+              transformOrigin: backgroundRotationOrigin(layer, pageWidth, pageHeight),
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

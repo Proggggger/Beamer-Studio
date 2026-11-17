@@ -4,6 +4,7 @@ import { ExportDialog } from './editor/ExportDialog';
 import { Inspector } from './editor/Inspector';
 import { PreviewPane } from './editor/PreviewPane';
 import { SlideRail } from './editor/SlideRail';
+import { TikzEditorHost } from './editor/TikzEditor';
 import { Toolbar } from './editor/Toolbar';
 import { downloadProject } from './model/projectIO';
 import { saveDeck } from './model/persistence';
@@ -95,6 +96,7 @@ export function App() {
         <span className="statusbar-keys">Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+S save project</span>
       </div>
       <ExportDialog />
+      <TikzEditorHost />
     </div>
   );
 }

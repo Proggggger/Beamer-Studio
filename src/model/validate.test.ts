@@ -346,3 +346,150 @@ describe('parseDeck two-column migration', () => {
     expect(body[0].id).toBe(once?.slides[1].body[0].id);
   });
 });
+
+describe('parseDeck tikz', () => {
+  it('keeps a tikz block and clamps its drawing', () => {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{ body: unknown[] }>;
+    };
+    raw.slides[1].body = [
+      {
+        id: 'tz1',
+        type: 'tikz',
+        name: 'Plot',
+        widthPct: 250,
+        drawing: {
+          width: 5,
+          height: 500,
+          shapes: [
+            { id: 'r1', kind: 'rect', x: 0, y: 0, x2: 10, y2: 10, stroke: '#FF0000' },
+            { id: 'bad', kind: 'spiral', x: 0, y: 0 },
+            { id: 'p1', kind: 'path', x: 0, y: 0, points: [{ x: 0, y: 0 }] },
+          ],
+        },
+      },
+    ];
+    const block = parseDeck(raw)?.slides[1].body[0];
+    if (block?.type !== 'tikz') throw new Error('expected tikz block');
+    expect(block.name).toBe('Plot');
+    expect(block.widthPct).toBe(100);
+    expect(block.drawing.width).toBe(10);
+    expect(block.drawing.height).toBe(400);
+    expect(block.drawing.shapes).toHaveLength(1);
+    expect(block.drawing.shapes[0].stroke).toBe('#ff0000');
+  });
+
+  it('accepts tikz layers without a source and rejects blank image layers', () => {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{ images: unknown[] }>;
+    };
+    raw.slides[1].images = [
+      { id: 'v1', kind: 'tikz', name: 'Vector', drawing: { width: 160, height: 90, shapes: [] } },
+      { id: 'i1', name: 'broken.png' },
+    ];
+    const images = parseDeck(raw)?.slides[1].images ?? [];
+    expect(images).toHaveLength(1);
+    expect(images[0].kind).toBe('tikz');
+    expect(images[0].src).toBe('');
+    expect(images[0].drawing).toEqual({ width: 160, height: 90, shapes: [], code: undefined });
+  });
+
+  it('keeps labels, corner radius and opacity on tikz shapes', () => {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{ body: unknown[] }>;
+    };
+    raw.slides[1].body = [
+      {
+        id: 'tz2',
+        type: 'tikz',
+        name: 'Labeled',
+        drawing: {
+          width: 80,
+          height: 50,
+          shapes: [
+            {
+              id: 'r1',
+              kind: 'rect',
+              x: 0,
+              y: 0,
+              x2: 20,
+              y2: 10,
+              text: 'Flow',
+              fontSize: 99,
+              textColor: '#FF0000',
+              textOpacity: 250,
+              cornerRadius: 99,
+              strokeOpacity: -5,
+              fillOpacity: 42,
+            },
+          ],
+        },
+      },
+    ];
+    const block = parseDeck(raw)?.slides[1].body[0];
+    if (block?.type !== 'tikz') throw new Error('expected tikz block');
+    expect(block.drawing.shapes[0]).toMatchObject({
+      kind: 'rect',
+      text: 'Flow',
+      fontSize: 40,
+      textColor: '#ff0000',
+      cornerRadius: 20,
+      strokeOpacity: 0,
+      fillOpacity: 42,
+    });
+    expect(block.drawing.shapes[0].textOpacity).toBeUndefined();
+  });
+});
+
+describe('parseDeck code blocks and font overrides', () => {
+  it('normalizes code metadata and keeps valid slide/block fonts', () => {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{
+        font?: unknown;
+        body: unknown[];
+      }>;
+    };
+    raw.slides[1].font = { family: 'tex-gyre-pagella' };
+    raw.slides[1].body = [
+      {
+        id: 'p',
+        type: 'paragraph',
+        text: 'x',
+        font: { family: 'custom', custom: 'Bad} tricky {' },
+      },
+      {
+        id: 'b',
+        type: 'code',
+        lang: 'ts',
+        text: 'let x = 1',
+        caption: 'Demo',
+        lineNumbers: true,
+        font: { family: 'nonsense' },
+      },
+    ];
+    const slide = parseDeck(raw)?.slides[1];
+    if (!slide) throw new Error('expected slide');
+    expect(slide.font).toEqual({ family: 'tex-gyre-pagella' });
+    expect(slide.body[0].font).toEqual({ family: 'custom', custom: 'Bad tricky' });
+    expect(slide.body[1]).toMatchObject({
+      type: 'code',
+      lang: 'typescript',
+      caption: 'Demo',
+      lineNumbers: true,
+    });
+    expect(slide.body[1].font).toBeUndefined();
+  });
+
+  it('falls back to plain text for unknown or missing code languages', () => {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{ body: unknown[] }>;
+    };
+    raw.slides[1].body = [
+      { id: 'a', type: 'code', lang: 'klingon', text: '' },
+      { id: 'b', type: 'code', text: '' },
+    ];
+    const body = parseDeck(raw)?.slides[1].body ?? [];
+    expect(body[0]).toMatchObject({ type: 'code', lang: 'text' });
+    expect(body[1]).toMatchObject({ type: 'code', lang: 'text' });
+  });
+});
