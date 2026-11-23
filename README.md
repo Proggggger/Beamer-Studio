@@ -64,6 +64,13 @@ pixel-perfect renderer — the exported `.tex` file is always the source of trut
   with a live warning list for anything approximated.
 
 ---
+## Screenshots
+
+<img width="1900" height="1025" alt="image" src="https://github.com/user-attachments/assets/eabff2f2-b320-4845-b193-0cdb60b99878" />
+<img width="1894" height="1018" alt="image" src="https://github.com/user-attachments/assets/9cf0dbbd-e893-4941-89ad-2986c51d80e2" />
+<img width="1894" height="1022" alt="image" src="https://github.com/user-attachments/assets/bc5b88a5-55c9-494a-9eac-60fbcff413d4" />
+
+
 
 ## Quick start
 
