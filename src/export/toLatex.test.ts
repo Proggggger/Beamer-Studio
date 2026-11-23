@@ -339,11 +339,38 @@ describe('toLatex slides', () => {
     expect(tex).toContain('\\usepackage{listings}');
     expect(tex).toContain('\\begin{frame}[fragile]{Code}{}');
     expect(tex).toContain(
-      '\\begin{lstlisting}[breaklines=true,language=Python,numbers=left,numberstyle=\\tiny,numbersep=6pt,caption={Example}]',
+      '\\begin{lstlisting}[breaklines=true,language=Python,numbers=left,numbersep=6pt,caption={Example}]',
     );
     expect(tex).toContain('const a = 1;');
     expect(tex).toContain('\\end{lstlisting}');
     expect(tex).not.toContain('\\begin{verbatim}');
+  });
+
+  it('colours keywords, comments, strings and line numbers in listings', () => {
+    const body: Block[] = [{ id: 'c', type: 'code', lang: 'python', text: 'return 1' }];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toContain('\\definecolor{bxcodekeyword}{RGB}{38,84,142}');
+    expect(tex).toContain('\\definecolor{bxcodecomment}{RGB}{90,118,92}');
+    expect(tex).toContain('\\definecolor{bxcodestring}{RGB}{158,56,62}');
+    expect(tex).toContain('keywordstyle=\\color{bxcodekeyword}\\bfseries');
+    expect(tex).toContain('commentstyle=\\color{bxcodecomment}\\itshape');
+    expect(tex).toContain('stringstyle=\\color{bxcodestring}');
+    expect(tex).toContain('numberstyle=\\tiny\\color{black!45}');
+  });
+
+  it('expands tabs to spaces instead of emitting ^^I', () => {
+    const body: Block[] = [
+      {
+        id: 'c',
+        type: 'code',
+        lang: 'python',
+        text: 'def f(x):\n\tif x:\n\t\treturn "a"\n',
+      },
+    ];
+    const tex = toLatex(deck({ slides: [frame(body)] }));
+    expect(tex).toContain('def f(x):\n    if x:\n        return "a"');
+    expect(tex).not.toContain('\t');
+    expect(tex).not.toContain('^^I');
   });
 
   it('omits the listings language for catalogs without a dialect', () => {

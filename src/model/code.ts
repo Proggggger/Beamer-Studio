@@ -65,6 +65,35 @@ export function codeLanguage(id: string): CodeLanguageOption {
   return CODE_LANGUAGES.find((entry) => entry.id === id) ?? CODE_LANGUAGES[0];
 }
 
+export const CODE_TAB_SIZE = 4;
+
+/**
+ * Listings prints raw tabs as `^^I`, so tabs are expanded to fixed stops like
+ * an editor would. Preview and export share this conversion.
+ */
+export function expandCodeTabs(text: string): string {
+  if (!text.includes('\t')) return text;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (!line.includes('\t')) return line;
+      let column = 0;
+      let out = '';
+      for (const char of line) {
+        if (char === '\t') {
+          const width = CODE_TAB_SIZE - (column % CODE_TAB_SIZE);
+          out += ' '.repeat(width);
+          column += width;
+        } else {
+          out += char;
+          column += 1;
+        }
+      }
+      return out;
+    })
+    .join('\n');
+}
+
 export function listingsDialect(id: string): string | undefined {
   return codeLanguage(id).dialect;
 }

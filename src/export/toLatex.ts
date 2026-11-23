@@ -1,5 +1,5 @@
 import { walkBlocks } from '../model/blockOps';
-import { listingsDialect } from '../model/code';
+import { expandCodeTabs, listingsDialect } from '../model/code';
 import { splitParagraphs } from '../model/paragraphs';
 import type {
   BackgroundImageSettings,
@@ -643,7 +643,7 @@ function renderBlocks(
         const dialect = listingsDialect(block.lang);
         if (dialect) options.push(`language=${dialect}`);
         if (block.lineNumbers) {
-          options.push('numbers=left', 'numberstyle=\\tiny', 'numbersep=6pt');
+          options.push('numbers=left', 'numbersep=6pt');
         }
         if (block.caption) {
           // Listings resets to the main font for captions, so carry the block
@@ -653,8 +653,9 @@ function renderBlocks(
         }
         lines.push(`${pad(level)}\\begin{lstlisting}[${options.join(',')}]`);
         // Indenting code rows or the end tag adds visible spaces and even an
-        // extra numbered line, so listing content stays flush left.
-        for (const row of block.text.split('\n')) lines.push(row);
+        // extra numbered line, so listing content stays flush left. Tabs must
+        // be expanded first: listings prints them literally as `^^I`.
+        for (const row of expandCodeTabs(block.text).split('\n')) lines.push(row);
         lines.push('\\end{lstlisting}');
         lines.push('');
         break;
@@ -767,13 +768,20 @@ export function toLatex(deck: Deck): string {
   if (hasBackgrounds || hasForegrounds || hasTikz) lines.push('\\usepackage{tikz}');
   if (hasCodeBlocks) {
     lines.push('\\usepackage{listings}');
+    lines.push('\\definecolor{bxcodekeyword}{RGB}{38,84,142}');
+    lines.push('\\definecolor{bxcodecomment}{RGB}{90,118,92}');
+    lines.push('\\definecolor{bxcodestring}{RGB}{158,56,62}');
     lines.push('\\lstset{%');
     lines.push('  basicstyle=\\ttfamily\\footnotesize,');
     lines.push('  breaklines=true,');
     lines.push('  columns=fullflexible,');
     lines.push('  keepspaces=true,');
     lines.push('  showstringspaces=false,');
-    lines.push('  tabsize=2,');
+    lines.push('  tabsize=4,');
+    lines.push('  keywordstyle=\\color{bxcodekeyword}\\bfseries,');
+    lines.push('  commentstyle=\\color{bxcodecomment}\\itshape,');
+    lines.push('  stringstyle=\\color{bxcodestring},');
+    lines.push('  numberstyle=\\tiny\\color{black!45},');
     lines.push('}');
   }
   lines.push(`\\setmainlanguage{${languageOption(settings.mainLanguage).tex}}`);

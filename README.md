@@ -153,9 +153,17 @@ the deck contains code). The inspector offers:
   PowerShell and plain text are exported as unhighlighted monospaced listings
   (the label says *plain*) because `listings` ships no safe built-in dialect for
   them.
+- **Highlighting** — dialect listings colour keywords (bold blue), comments
+  (italic green) and strings (dark red). The exporter defines these as
+  `bxcodekeyword`, `bxcodecomment` and `bxcodestring` with `\definecolor`, so
+  they survive any theme.
 - **Line numbers** — prints `numbers=left` with a small numeric margin; the
   canvas preview shows the same numbered gutter.
 - **Caption** — an optional listing caption printed below the code.
+
+Indentation pasted as tabs is expanded to four-column tab stops before export
+and in the canvas preview. Without that, `listings` prints each raw tab as
+`^^I` in the PDF.
 
 The preview shows a language badge, the numbered gutter when enabled, and the
 caption. Frames containing code are exported as `\begin{frame}[fragile]`, which
@@ -384,8 +392,10 @@ The exporter also:
   subtitle group even when empty is deliberate: Beamer would otherwise swallow
   a leading color-override group into the title.
 - Adds `fragile` to frames containing code, loads `listings` and emits a default
-  `\lstset` (monospaced, wrapped, flexible columns). Each listing carries its
-  dialect and options:
+  `\lstset` (monospaced, wrapped, flexible columns, coloured keywords, comments
+  and strings, grey line numbers). Tabs in code are expanded to four-column
+  stops, because `listings` otherwise prints them literally as `^^I`. Each
+  listing carries its dialect and options:
   `\begin{lstlisting}[breaklines=true,language=Python,numbers=left,numberstyle=\tiny,numbersep=6pt,caption={Example}]`.
 - Declares slide and block font overrides once per distinct family as
   letter-named macros — `\bxfontA`, `\bxfontB`, … `\bxfontAA` — because TeX
@@ -648,7 +658,7 @@ npm run typecheck
 npm run build
 ```
 
-The Vitest suite (175 tests in 7 files) covers theme resolution and color math,
+The Vitest suite (177 tests in 7 files) covers theme resolution and color math,
 image stack resolution and placement math, project validation and legacy
 migration, store operations, TikZ generation/parsing/anchors, and LaTeX output
 (preamble, frames, blocks, code listings, scoped font declarations and groups,

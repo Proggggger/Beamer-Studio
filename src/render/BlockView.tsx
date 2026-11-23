@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import { codeLanguage } from '../model/code';
+import { codeLanguage, expandCodeTabs } from '../model/code';
 import { splitParagraphs } from '../model/paragraphs';
 import { useDeckStore } from '../model/store';
 import type { Block, Deck, ImageBlock, ListBlock, TikzBlock } from '../model/types';
@@ -308,12 +308,13 @@ function CodeBlockView({
   const selectBlock = useDeckStore((state) => state.selectBlock);
   const language = codeLanguage(block.lang);
   const renderCode = (value: string) => {
+    const source = expandCodeTabs(value);
     const code = block.lineNumbers
-      ? value
+      ? source
           .split('\n')
           .map((line, index) => `${String(index + 1).padStart(2, ' ')}  ${line}`)
           .join('\n')
-      : value;
+      : source;
     return (
       <pre className={`bx-code${block.lineNumbers ? ' has-numbers' : ''}`}>
         <code>{code}</code>
