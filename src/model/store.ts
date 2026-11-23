@@ -47,6 +47,7 @@ interface DeckStore {
   rightTab: RightTab;
   designTab: DesignTab;
   showExport: boolean;
+  showImport: boolean;
   past: Deck[];
   future: Deck[];
   lastKey: string | null;
@@ -58,6 +59,7 @@ interface DeckStore {
   setRightTab: (tab: RightTab) => void;
   setDesignTab: (tab: DesignTab) => void;
   setShowExport: (open: boolean) => void;
+  setShowImport: (open: boolean) => void;
 
   updateMeta: (patch: Partial<DeckMeta>, key?: string) => void;
   updateDocument: (patch: Partial<DocumentSettings>, key?: string) => void;
@@ -139,6 +141,7 @@ export const useDeckStore = create<DeckStore>((set, get) => {
     rightTab: 'design',
     designTab: 'template',
     showExport: false,
+    showImport: false,
     past: [],
     future: [],
     lastKey: null,
@@ -156,6 +159,7 @@ export const useDeckStore = create<DeckStore>((set, get) => {
     setRightTab: (tab) => set({ rightTab: tab }),
     setDesignTab: (tab) => set({ designTab: tab }),
     setShowExport: (open) => set({ showExport: open }),
+    setShowImport: (open) => set({ showImport: open }),
 
     updateMeta: (patch, key) =>
       commit((deck) => ({ ...deck, meta: { ...deck.meta, ...patch } }), key),
@@ -416,6 +420,7 @@ export const useDeckStore = create<DeckStore>((set, get) => {
         lastKey: null,
         lastTime: 0,
         showExport: false,
+        showImport: false,
       }),
 
     newDeck: () => {

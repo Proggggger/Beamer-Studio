@@ -493,3 +493,66 @@ describe('parseDeck code blocks and font overrides', () => {
     expect(body[1]).toMatchObject({ type: 'code', lang: 'text' });
   });
 });
+
+describe('parseDeck tables', () => {
+  function tableDeck(table: Record<string, unknown>): unknown {
+    const raw = JSON.parse(JSON.stringify(createEmptyDeck())) as {
+      slides: Array<{ body: unknown[] }>;
+    };
+    raw.slides[1].body = [{ id: 't', type: 'table', ...table }];
+    return raw;
+  }
+
+  function firstTable(raw: unknown): Extract<Block, { type: 'table' }> {
+    const block = parseDeck(raw)?.slides[1].body[0];
+    if (block?.type !== 'table') throw new Error('expected table');
+    return block;
+  }
+
+  it('pads ragged rows and alignments to one rectangular shape', () => {
+    const table = firstTable(
+      tableDeck({
+        rows: [['a'], ['b', 'c', 'd']],
+        align: ['center'],
+      }),
+    );
+    expect(table.align).toEqual(['center', 'left', 'left']);
+    expect(table.rows).toEqual([
+      ['a', '', ''],
+      ['b', 'c', 'd'],
+    ]);
+  });
+
+  it('defaults to a header and no borders', () => {
+    const table = firstTable(tableDeck({ rows: [['only']] }));
+    expect(table.header).toBe(true);
+    expect(table.bordered).toBe(false);
+    expect(table.rows).toEqual([['only']]);
+    expect(table.align).toEqual(['left']);
+  });
+
+  it('normalizes multi-line cells and caps the grid size', () => {
+    const rows = Array.from({ length: 60 }, () => Array.from({ length: 14 }, () => 'x'));
+    rows[0][0] = 'two\nlines';
+    const table = firstTable(tableDeck({ rows, align: [] }));
+    expect(table.rows).toHaveLength(40);
+    expect(table.rows[0]).toHaveLength(12);
+    expect(table.rows[0][0]).toBe('two lines');
+  });
+
+  it('drops unknown alignments and keeps flags only when requested', () => {
+    const table = firstTable(
+      tableDeck({
+        rows: [['a', 'b']],
+        align: ['right', 'sideways'],
+        header: false,
+        bordered: true,
+        caption: 'Summary',
+      }),
+    );
+    expect(table.align).toEqual(['right', 'left']);
+    expect(table.header).toBe(false);
+    expect(table.bordered).toBe(true);
+    expect(table.caption).toBe('Summary');
+  });
+});

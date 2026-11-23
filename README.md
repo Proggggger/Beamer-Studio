@@ -29,6 +29,9 @@ pixel-perfect renderer — the exported `.tex` file is always the source of trut
 - **Syntax-listing code blocks** — 27 recognised languages, an optional caption
   and optional line numbers, exported through the `listings` package inside
   `fragile` frames.
+- **Visual table block** — an editable cell grid with per-column alignment,
+  header detection, booktabs or full-grid borders, an optional caption and
+  spreadsheet-style paste from a tab-separated block.
 - **28 languages** through polyglossia, with a dedicated Greek/Cyrillic face and
   automatic `\textgreek{...}` / `\textrussian{...}` markup so XeLaTeX switches
   fonts instead of dropping glyphs.
@@ -55,6 +58,10 @@ pixel-perfect renderer — the exported `.tex` file is always the source of trut
 - **Clean XeLaTeX export** — theme, colortheme, fontspec, polyglossia, custom
   colors, TikZ drawings and TikZ image layers are emitted as a ready-to-compile
   document.
+- **LaTeX import** — paste or open a Beamer `.tex` file and get an editable
+  deck back: preamble metadata, themes, languages, frames, sections, lists,
+  blocks, columns, tables, code, math and TikZ are mapped onto editor blocks,
+  with a live warning list for anything approximated.
 
 ---
 
@@ -133,6 +140,7 @@ place.
 | **Image**          | `\includegraphics` at a chosen width, with optional caption. |
 | **Math**           | Display math (`\[ ... \]`).                                 |
 | **Code**           | `listings` block with an optional dialect, caption and line numbers; the containing frame is marked `fragile`. |
+| **Table**          | A `tabular` with per-column alignment, an optional header row, booktabs rules or a full grid, and an optional caption. |
 | **TikZ drawing**   | A centered `tikzpicture` scaled to a chosen text width, with optional caption. |
 | **Table of contents** | `\tableofcontents`.                                      |
 
@@ -140,6 +148,7 @@ Each block can be moved, deleted, and given children; blocks and lists support
 indent/outdent where relevant. **+ Quick image** in the Structure panel opens
 the file picker and appends an Image block with the chosen file already loaded.
 **+ Quick code** appends a Python listing and selects it, ready to edit.
+**+ Quick table** appends a 3×3 table with a header row and selects it.
 
 #### Code listings
 
@@ -168,6 +177,30 @@ and in the canvas preview. Without that, `listings` prints each raw tab as
 The preview shows a language badge, the numbered gutter when enabled, and the
 caption. Frames containing code are exported as `\begin{frame}[fragile]`, which
 is required by `listings`.
+
+#### Tables
+
+Tables are edited directly in the inspector as a grid of inputs; the canvas
+preview and the export stay in sync with every keystroke. The editor offers:
+
+- **Rows and columns** — add or delete either from the grid header/row gutter.
+  Every row is kept rectangular, with a ceiling of 40 rows and 12 columns.
+- **Column alignment** — an L/C/R selector above each column maps to `l`, `c`
+  or `r` in the `tabular` preamble.
+- **Header row** — the first row is rendered in bold and exported inside
+  `\textbf{...}`. Turn it off for data-only tables.
+- **Borders** — booktabs rules (`\toprule`, `\midrule`, `\bottomrule`) by
+  default, or a full `\hline` grid with vertical bars. `booktabs` is loaded
+  automatically when the deck contains any table.
+- **Caption** — wraps the tabular in a `table` float with `\centering` and
+  `\caption{...}`; without a caption the table is centered directly in the
+  frame.
+- **Spreadsheet paste** — paste tab-separated cells into any cell and the table
+  grows around the anchor, preserving existing content up to the size limits.
+  Single-cell pastes are left to the browser.
+- **Inline LaTeX** — cell text accepts the usual inline markup and math. Bare
+  `&` and `%` are escaped to `\&` and `\%` on export so they cannot break the
+  `tabular`; already-escaped pairs are left alone.
 
 #### Font overrides
 
@@ -340,7 +373,7 @@ rectangle becomes `rounded corners=…mm`.
 | `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y`  | Redo                         |
 | `Ctrl/Cmd+S`                        | Download the `.beamer.json` project |
 | `Ctrl/Cmd+E`                        | Open the Export LaTeX viewer |
-| `Escape`                            | Close the export viewer      |
+| `Escape`                            | Close the export or import viewer |
 
 Undo/redo and the export shortcut are ignored while typing in inputs; save always
 works.
@@ -397,6 +430,10 @@ The exporter also:
   stops, because `listings` otherwise prints them literally as `^^I`. Each
   listing carries its dialect and options:
   `\begin{lstlisting}[breaklines=true,language=Python,numbers=left,numberstyle=\tiny,numbersep=6pt,caption={Example}]`.
+- Emits tables as `tabular` environments, with booktabs rules by default (loading
+  `booktabs`) or an `\hline` grid when borders are requested. Header cells are
+  wrapped in `\textbf{...}`, captions lift the tabular into a `table` float, and
+  bare `&`/`%` in cells are escaped so the row structure stays intact.
 - Declares slide and block font overrides once per distinct family as
   letter-named macros — `\bxfontA`, `\bxfontB`, … `\bxfontAA` — because TeX
   control words cannot contain digits. Each declaration is guarded by
@@ -540,6 +577,40 @@ especially before presenting or printing.
 
 ---
 
+## Importing from LaTeX
+
+**Import .tex** in the toolbar opens a dialog that accepts a pasted document or
+a `.tex` file from disk. Parsing happens live, so the detected slide count and
+every approximation appear before you commit; **Import into editor** then
+replaces the deck and clears undo history, exactly like **Open**.
+
+The parser reads both the preamble and the `document` body:
+
+- **Preamble** — `\documentclass` aspect ratio and font size, `\usetheme`,
+  `\usecolortheme`, title/subtitle/author/institute/date, polyglossia and babel
+  languages, the catalogued `\setsansfont`/`\setmainfont` family, `bx*` custom
+  colors, bullet/block templates and hidden navigation symbols.
+- **Structure** — `\titlepage`/`\maketitle`, `\section` with `\sectionpage`, and
+  `\begin{frame}` or legacy `\frame`, including title arguments,
+  `\frametitle`, `\framesubtitle`, overlay specifications and `[fragile]`.
+- **Content** — paragraphs (center/flushright and `\hspace*{..em}` indent),
+  nested itemize/enumerate/description lists with `\pause`, normal, alert and
+  example blocks, theorem-like environments, columns, figures, tables
+  (booktabs or `\hline` grids, captions, `\multicolumn` cells), display math
+  through `\[...\]` and equation/align/gather environments,
+  listings/minted/verbatim code and TikZ pictures — including the
+  `\resizebox` wrapper the editor itself emits.
+- **Inline markup** is preserved verbatim for the KaTeX renderer, while
+  comments, `\label`s and layout-only commands are removed.
+
+Anything the model cannot represent is listed as a warning and, where possible,
+imported as plain content instead of failing the import. Images become empty
+placeholders that keep the file name and width; reattach the real files from
+the image inspector. Importing a deck previously exported by the editor is
+supported, which makes the round trip a quick way to seed a new deck.
+
+---
+
 ## How it works
 
 - **One deck model.** A versioned `Deck` object (`src/model/types.ts`) is the
@@ -593,6 +664,7 @@ src/
     DesignPanel.tsx       template, colors, layout and images tabs
     ImageStackCard.tsx    shared stack editor for template and slide layers
     ExportDialog.tsx      LaTeX viewer, copy/download, image downloads
+    ImportDialog.tsx      paste/open a .tex file, live warnings, deck replacement
     TikzEditor.tsx        drawing canvas, shape properties and TikZ code pane
     tikzEditorStore.ts    modal open/close state and save callback
     imageFile.ts          client-side image resize/encode
@@ -621,12 +693,15 @@ src/
     persistence.ts        localStorage autosave/load
     projectIO.ts          .beamer.json download/open
     blockOps.ts           block tree helpers
+    table.ts              table grid, alignment, row/column and paste helpers
     code.ts               code-language catalog, aliases and listings dialects
     paragraphs.ts         paragraph splitting
     ids.ts                id generation
   export/
     toLatex.ts            XeLaTeX generation, image collection, all image-layer surfaces
     download.ts           blob/text download helpers, slugify
+  import/
+    fromLatex.ts          Beamer source parser: preamble, frames, blocks, tables, code, TikZ
   tikz/
     drawing.ts            shape defaults, TikZ code generation, drawing summaries
     parse.ts              subset parser for hand-written TikZ
@@ -646,7 +721,7 @@ src/
 | Math preview | KaTeX 0.16                               |
 | Tests        | Vitest 3                                 |
 | Styling      | Plain CSS with theme-driven CSS variables |
-| Export       | XeLaTeX + fontspec + polyglossia + TikZ + listings |
+| Export       | XeLaTeX + fontspec + polyglossia + TikZ + listings + booktabs |
 
 ---
 
@@ -658,15 +733,20 @@ npm run typecheck
 npm run build
 ```
 
-The Vitest suite (177 tests in 7 files) covers theme resolution and color math,
+The Vitest suite (224 tests in 9 files) covers theme resolution and color math,
 image stack resolution and placement math, project validation and legacy
-migration, store operations, TikZ generation/parsing/anchors, and LaTeX output
-(preamble, frames, blocks, code listings, scoped font declarations and groups,
-images, background templates, foreground overlays, per-slide layers and TikZ
-drawings). Layout, image layers and TikZ output have additionally
-been verified by compiling exported decks with MiKTeX XeLaTeX in both aspect
-ratios — running twice for page-anchored overlays — and inspecting the resulting
-PDF pages, with TikZ content and vector layers checked in the browser as well.
+migration, store operations, table editing/paste helpers, TikZ
+generation/parsing/anchors, LaTeX output (preamble, frames, blocks, code
+listings, tables, scoped font declarations and groups, images, background
+templates, foreground overlays, per-slide layers and TikZ drawings), and the
+LaTeX importer (preamble mapping, comments/verbatim, frames and sections, lists
+and blocks, columns, tables, code, math, images, TikZ and a full
+export → import round trip). Imported decks — both a hand-written source and
+the round-tripped sample — were exported and compiled with MiKTeX XeLaTeX.
+Layout, image layers, tables and TikZ output have also been verified by
+compiling exported decks with MiKTeX XeLaTeX in both aspect ratios — running
+twice for page-anchored overlays — and inspecting the resulting PDF pages, with
+TikZ content and vector layers checked in the browser as well.
 
 ---
 
@@ -688,6 +768,10 @@ PDF pages, with TikZ content and vector layers checked in the browser as well.
   they are dragged off (or the host is edited through hand-written code).
 - Images are not embedded in `.tex` output — download them from the export
   viewer and keep them beside the source file.
+- LaTeX import is intentionally approximate: images arrive as placeholders,
+  unknown environments are flattened to plain blocks, per-block colour and
+  font overrides, template image layers and custom macros are not
+  reconstructed, and complex overlay logic is reduced to item-level `\pause`.
 - Decks with foreground or per-slide layers need **two XeLaTeX runs** on a fresh
   compile; the first resolves the page anchors, the second places the overlays.
 - Autosave is local to the current browser/origin. Use **Save** to archive and

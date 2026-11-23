@@ -40,6 +40,18 @@ export function createBlock(type: BlockType): Block {
         text: 'print("Hello, Beamer!")',
         lineNumbers: false,
       };
+    case 'table':
+      return {
+        id: uid('block'),
+        type,
+        rows: [
+          ['Header 1', 'Header 2', 'Header 3'],
+          ['Cell 1', 'Cell 2', 'Cell 3'],
+          ['Cell 4', 'Cell 5', 'Cell 6'],
+        ],
+        align: ['left', 'left', 'left'],
+        header: true,
+      };
     case 'toc':
       return { id: uid('block'), type };
     case 'tikz':
@@ -237,6 +249,8 @@ export function cloneBlock(block: Block): Block {
       return { ...block, id, left: cloneBlocks(block.left), right: cloneBlocks(block.right) };
     case 'tikz':
       return { ...block, id, drawing: cloneDrawing(block.drawing) };
+    case 'table':
+      return { ...block, id, rows: block.rows.map((row) => [...row]), align: [...block.align] };
     case 'paragraph':
     case 'image':
     case 'math':
@@ -266,6 +280,8 @@ export function blockLabel(block: Block): string {
       return block.tex || 'Math';
     case 'code':
       return `${block.lang || 'text'} code`;
+    case 'table':
+      return block.caption || `${block.rows.length} × ${block.align.length} table`;
     case 'toc':
       return 'Table of contents';
     case 'tikz':

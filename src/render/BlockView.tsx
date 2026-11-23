@@ -348,6 +348,55 @@ function CodeBlockView({
   );
 }
 
+function TableView({
+  block,
+  context,
+}: {
+  block: Extract<Block, { type: 'table' }>;
+  context: RenderContext;
+}) {
+  const selectBlock = useDeckStore((state) => state.selectBlock);
+  const columns = Math.max(1, block.align.length);
+  const headerRow = block.header ? block.rows[0] : undefined;
+  const bodyRows = block.header ? block.rows.slice(1) : block.rows;
+  const alignment = (index: number) => ({
+    textAlign: block.align[index] ?? ('left' as const),
+  });
+  return (
+    <div
+      className={`bx-table-block${context.selectedBlockId === block.id ? ' is-selected' : ''}`}
+      onClick={selectHandler(block.id, context.editable, selectBlock)}
+      data-block-id={block.id}
+    >
+      <table className={`bx-table${block.bordered ? ' is-bordered' : ''}`}>
+        {headerRow ? (
+          <thead>
+            <tr>
+              {Array.from({ length: columns }, (_, index) => (
+                <th key={index} style={alignment(index)}>
+                  <Inline text={headerRow[index] || '\u00a0'} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+        ) : null}
+        <tbody>
+          {bodyRows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {Array.from({ length: columns }, (_, index) => (
+                <td key={index} style={alignment(index)}>
+                  <Inline text={row[index] || '\u00a0'} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {block.caption ? <div className="bx-table-caption">{block.caption}</div> : null}
+    </div>
+  );
+}
+
 function TocView({ block, context }: { block: Extract<Block, { type: 'toc' }>; context: RenderContext }) {
   const selectBlock = useDeckStore((state) => state.selectBlock);
   const sections = context.deck.slides.filter((slide) => slide.kind === 'section');
@@ -436,6 +485,8 @@ function BlockContent({ block, ...context }: BlockViewProps) {
       return <MathBlockView block={block} context={context} />;
     case 'code':
       return <CodeBlockView block={block} context={context} />;
+    case 'table':
+      return <TableView block={block} context={context} />;
     case 'toc':
       return <TocView block={block} context={context} />;
     case 'tikz':

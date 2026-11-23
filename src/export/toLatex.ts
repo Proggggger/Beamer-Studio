@@ -81,6 +81,15 @@ function hasCode(blocks: Block[]): boolean {
   });
 }
 
+function hasTableBlocks(blocks: Block[]): boolean {
+  return blocks.some((block) => {
+    if (block.type === 'table') return true;
+    if (block.type === 'block') return hasTableBlocks(block.body);
+    if (block.type === 'columns') return hasTableBlocks(block.left) || hasTableBlocks(block.right);
+    return false;
+  });
+}
+
 function fontChoiceKey(choice: FontChoice): string {
   return `${choice.family}\u0000${choice.custom ?? ''}`;
 }
@@ -500,6 +509,23 @@ function renderList(
   lines.push(`${pad(level)}\\end{${env}}`);
 }
 
+/** A bare & ends a tabular cell and a bare % comments out the rest of the row. */
+function escapeTableCell(value: string): string {
+  let out = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    let backslashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor -= 1) {
+      backslashes += 1;
+    }
+    // An odd run means the character is already escaped (`\&`); an even run is
+    // a command ending in `\\` followed by a bare alignment character.
+    if ((char === '&' || char === '%') && backslashes % 2 === 0) out += '\\';
+    out += char;
+  }
+  return out;
+}
+
 /** beamer keeps \parindent at 0pt, so indent gets an explicit horizontal box. */
 function paragraphText(text: string, indent?: number): string {
   if (!indent || indent <= 0) return text;
@@ -632,6 +658,57 @@ function renderBlocks(
         lines.push('');
         break;
       }
+      case 'table': {
+        const columns = Math.max(1, block.align.length);
+        const letters = (block.align.length > 0 ? block.align : ['left']).map(
+          (align) => align[0],
+        );
+        const spec = block.bordered ? `|${letters.join('|')}|` : letters.join('');
+        const rows =
+          block.rows.length > 0
+            ? block.rows
+            : [Array.from({ length: columns }, () => '')];
+        const rowLines = (indent: string, header: boolean, index: number): string[] => {
+          const cells = Array.from({ length: columns }, (_, column) => {
+            const text = wrapText(escapeTableCell((rows[index]?.[column] ?? '').trim()));
+            return header ? `\\textbf{${text}}` : text;
+          });
+          return [`${indent}${cells.join(' & ')} \\\\`];
+        };
+        const indent = pad(level + 1);
+        const rowIndent = pad(level + 2);
+        const tableLines: string[] = [`${indent}\\begin{tabular}{${spec}}`];
+        if (block.bordered) {
+          tableLines.push(`${rowIndent}\\hline`);
+          rows.forEach((_, index) => {
+            tableLines.push(...rowLines(rowIndent, block.header && index === 0, index));
+            tableLines.push(`${rowIndent}\\hline`);
+          });
+        } else {
+          tableLines.push(`${rowIndent}\\toprule`);
+          rows.forEach((_, index) => {
+            tableLines.push(...rowLines(rowIndent, block.header && index === 0, index));
+            if (block.header && index === 0 && rows.length > 1) {
+              tableLines.push(`${rowIndent}\\midrule`);
+            }
+          });
+          tableLines.push(`${rowIndent}\\bottomrule`);
+        }
+        tableLines.push(`${indent}\\end{tabular}`);
+        if (block.caption) {
+          lines.push(`${pad(level)}\\begin{table}`);
+          lines.push(`${indent}\\centering`);
+          lines.push(...tableLines);
+          lines.push(`${indent}\\caption{${wrapText(block.caption)}}`);
+          lines.push(`${pad(level)}\\end{table}`);
+        } else {
+          lines.push(`${pad(level)}\\begin{center}`);
+          lines.push(...tableLines);
+          lines.push(`${pad(level)}\\end{center}`);
+        }
+        lines.push('');
+        break;
+      }
       case 'math':
         lines.push(`${pad(level)}\\[`);
         lines.push(`${pad(level + 1)}${block.tex}`);
@@ -740,6 +817,7 @@ export function toLatex(deck: Deck): string {
       (slot) => theme.foregrounds[slot].length > 0,
     ) || deck.slides.some((slide) => slide.images.length > 0);
   const hasCodeBlocks = deck.slides.some((slide) => hasCode(slide.body));
+  const hasTables = deck.slides.some((slide) => hasTableBlocks(slide.body));
   const fontOverrides = collectFontOverrides(deck);
 
   lines.push('% !TeX program = xelatex');
@@ -766,6 +844,7 @@ export function toLatex(deck: Deck): string {
   lines.push('\\usepackage{polyglossia}');
   const hasTikz = deck.slides.some((slide) => hasTikzBlocks(slide.body));
   if (hasBackgrounds || hasForegrounds || hasTikz) lines.push('\\usepackage{tikz}');
+  if (hasTables) lines.push('\\usepackage{booktabs}');
   if (hasCodeBlocks) {
     lines.push('\\usepackage{listings}');
     lines.push('\\definecolor{bxcodekeyword}{RGB}{38,84,142}');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DesignPanel } from './editor/DesignPanel';
 import { ExportDialog } from './editor/ExportDialog';
+import { ImportDialog } from './editor/ImportDialog';
 import { Inspector } from './editor/Inspector';
 import { PreviewPane } from './editor/PreviewPane';
 import { SlideRail } from './editor/SlideRail';
@@ -96,6 +97,7 @@ export function App() {
         <span className="statusbar-keys">Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+S save project</span>
       </div>
       <ExportDialog />
+      <ImportDialog />
       <TikzEditorHost />
     </div>
   );

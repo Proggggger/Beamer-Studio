@@ -1,7 +1,25 @@
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type ReactNode,
+} from 'react';
 import { blockLabel, findBlock } from '../model/blockOps';
 import { CODE_LANGUAGES, codeLanguage } from '../model/code';
 import { useDeckStore } from '../model/store';
+import {
+  addTableColumn,
+  addTableRow,
+  parseTablePaste,
+  pasteTableCells,
+  removeTableColumn,
+  removeTableRow,
+  setTableAlign,
+  setTableCell,
+  tableColumnCount,
+} from '../model/table';
 import type {
   Block,
   BlockColorOverrides,
@@ -11,6 +29,7 @@ import type {
   DeckMeta,
   FontChoice,
   FontId,
+  TableAlign,
 } from '../model/types';
 import { isHexColor } from '../themes/colorMath';
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../themes/fonts';
@@ -25,6 +44,7 @@ import { openTikzEditor } from './tikzEditorStore';
 const BLOCK_TYPES: Array<{ type: BlockType; label: string }> = [
   { type: 'paragraph', label: 'Paragraph' },
   { type: 'list', label: 'List' },
+  { type: 'table', label: 'Table' },
   { type: 'block', label: 'Block' },
   { type: 'columns', label: 'Columns' },
   { type: 'image', label: 'Image' },
@@ -37,6 +57,7 @@ const BLOCK_TYPES: Array<{ type: BlockType; label: string }> = [
 const BLOCK_BADGES: Record<BlockType, string> = {
   paragraph: 'P',
   list: '•',
+  table: '▦',
   block: '▣',
   columns: '⫼',
   image: '▧',
@@ -717,6 +738,151 @@ const TONES: Array<{ tone: BlockTone; label: string; env: string; description: s
   },
 ];
 
+function TableEditor({ block }: { block: Extract<Block, { type: 'table' }> }) {
+  const updateBlock = useDeckStore((state) => state.updateBlock);
+  const columns = tableColumnCount(block);
+  const patch = (next: Extract<Block, { type: 'table' }>, key: string) =>
+    updateBlock(block.id, (target) => (target.type === 'table' ? next : target), key);
+
+  const updateCell = (row: number, column: number, text: string) =>
+    patch(setTableCell(block, row, column, text), `table-cell:${block.id}:${row}:${column}`);
+
+  const handlePaste = (event: ClipboardEvent<HTMLInputElement>, row: number, column: number) => {
+    const matrix = parseTablePaste(event.clipboardData.getData('text/plain'));
+    if (!matrix) return;
+    event.preventDefault();
+    patch(pasteTableCells(block, matrix, row, column), `table-paste:${block.id}`);
+  };
+
+  return (
+    <>
+      <div className="table-editor-scroll">
+        <table className="table-edit-grid">
+          <thead>
+            <tr>
+              <th className="table-edit-corner" aria-hidden />
+              {block.align.map((align, column) => (
+                <th key={column} className="table-edit-colhead">
+                  <div className="table-col-tools">
+                    <select
+                      className="table-align-select"
+                      value={align}
+                      aria-label={`Column ${column + 1} alignment`}
+                      title={`Column ${column + 1} alignment`}
+                      onChange={(event) =>
+                        patch(
+                          setTableAlign(block, column, event.target.value as TableAlign),
+                          `table-align:${block.id}:${column}`,
+                        )
+                      }
+                    >
+                      <option value="left">L</option>
+                      <option value="center">C</option>
+                      <option value="right">R</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-danger"
+                      title="Delete column"
+                      disabled={columns <= 1}
+                      onClick={() =>
+                        patch(removeTableColumn(block, column), `table-del-col:${block.id}`)
+                      }
+                    >
+                      &#10005;
+                    </button>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {block.rows.map((row, rowIndex) => (
+              <tr key={rowIndex} className={block.header && rowIndex === 0 ? 'is-header' : ''}>
+                <th className="table-edit-rowhead">
+                  <span className="table-row-number">{rowIndex + 1}</span>
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn-danger"
+                    title="Delete row"
+                    disabled={block.rows.length <= 1}
+                    onClick={() =>
+                      patch(removeTableRow(block, rowIndex), `table-del-row:${block.id}`)
+                    }
+                  >
+                    &#10005;
+                  </button>
+                </th>
+                {Array.from({ length: columns }, (_, column) => (
+                  <td key={column}>
+                    <input
+                      value={row[column] ?? ''}
+                      spellCheck={false}
+                      aria-label={`Row ${rowIndex + 1}, column ${column + 1}`}
+                      onChange={(event) => updateCell(rowIndex, column, event.target.value)}
+                      onPaste={(event) => handlePaste(event, rowIndex, column)}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="btn btn-tiny"
+          onClick={() => patch(addTableRow(block), `table-add-row:${block.id}`)}
+        >
+          + Row
+        </button>
+        <button
+          type="button"
+          className="btn btn-tiny"
+          onClick={() => patch(addTableColumn(block), `table-add-col:${block.id}`)}
+        >
+          + Column
+        </button>
+      </div>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={block.header}
+          onChange={(event) =>
+            patch({ ...block, header: event.target.checked }, `table-header:${block.id}`)
+          }
+        />
+        First row is a header
+      </label>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={block.bordered === true}
+          onChange={(event) =>
+            patch({ ...block, bordered: event.target.checked }, `table-borders:${block.id}`)
+          }
+        />
+        Full grid borders (instead of booktabs rules)
+      </label>
+      <Field label="Caption">
+        <input
+          value={block.caption ?? ''}
+          spellCheck={false}
+          onChange={(event) =>
+            patch({ ...block, caption: event.target.value }, `table-caption:${block.id}`)
+          }
+        />
+      </Field>
+      <p className="muted small">
+        {block.rows.length} rows × {columns} columns. Cells accept inline LaTeX; paste a
+        tab-separated block from a spreadsheet into any cell to fill the grid at once. Bare{' '}
+        <code>&amp;</code> and <code>%</code> are escaped in the export.
+      </p>
+    </>
+  );
+}
+
 function SelectedBlockEditor({ block }: { block: Block }) {
   const updateBlock = useDeckStore((state) => state.updateBlock);
   return (
@@ -754,6 +920,7 @@ function SelectedBlockEditor({ block }: { block: Block }) {
           />
         </Field>
       ) : null}
+      {block.type === 'table' ? <TableEditor block={block} /> : null}
       {block.type === 'code' ? (
         <>
           <Field label="Language">
@@ -1014,6 +1181,9 @@ function SlideEditor({ deck }: { deck: Deck }) {
               </button>
               <button type="button" className="btn btn-tiny" onClick={() => addBlock('code')}>
                 + Quick code
+              </button>
+              <button type="button" className="btn btn-tiny" onClick={() => addBlock('table')}>
+                + Quick table
               </button>
               <button
                 type="button"

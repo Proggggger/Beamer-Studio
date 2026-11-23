@@ -6,6 +6,13 @@ import { wrapInColumns } from './blockOps';
 import { validCodeLang } from './code';
 import { DEFAULT_DOCUMENT, DEFAULT_META, DEFAULT_THEME } from './defaults';
 import { uid } from './ids';
+import {
+  isTableAlign,
+  normalizeTableRows,
+  TABLE_MAX_CELL,
+  TABLE_MAX_COLUMNS,
+  TABLE_MAX_ROWS,
+} from './table';
 import type {
   BackgroundImageSettings,
   Block,
@@ -19,6 +26,7 @@ import type {
   LanguageId,
   Slide,
   SlideImageStacks,
+  TableAlign,
   ThemeSettings,
   TikzDrawing,
   TikzPoint,
@@ -168,6 +176,33 @@ function validTikzDrawing(value: unknown): TikzDrawing {
   return { width, height, shapes, code: code.trim() ? code : undefined };
 }
 
+function validTableData(
+  rawRows: unknown,
+  rawAlign: unknown,
+): { rows: string[][]; align: TableAlign[] } {
+  const align: TableAlign[] = Array.isArray(rawAlign)
+    ? rawAlign.slice(0, TABLE_MAX_COLUMNS).map((entry) => (isTableAlign(entry) ? entry : 'left'))
+    : [];
+  const matrix: string[][] = Array.isArray(rawRows)
+    ? rawRows
+        .slice(0, TABLE_MAX_ROWS)
+        .filter((row): row is unknown[] => Array.isArray(row))
+        .map((row) =>
+          row
+            .slice(0, TABLE_MAX_COLUMNS)
+            .map((cell) =>
+              str(cell)
+                .replace(/\s*[\r\n]+\s*/g, ' ')
+                .slice(0, TABLE_MAX_CELL),
+            ),
+        )
+    : [];
+  const columns = Math.max(1, align.length, ...matrix.map((row) => row.length));
+  const rows = normalizeTableRows(matrix.length > 0 ? matrix : [[]], columns);
+  const nextAlign = Array.from({ length: columns }, (_, index) => align[index] ?? 'left');
+  return { rows, align: nextAlign };
+}
+
 function validBlocks(value: unknown, depth = 0): Block[] {
   if (!Array.isArray(value) || depth > 3) return [];
   const blocks: Block[] = [];
@@ -247,6 +282,20 @@ function validBlocks(value: unknown, depth = 0): Block[] {
           font: validFontChoice(raw.font),
         });
         break;
+      case 'table': {
+        const table = validTableData(raw.rows, raw.align);
+        blocks.push({
+          id,
+          type: 'table',
+          rows: table.rows,
+          align: table.align,
+          header: raw.header !== false,
+          bordered: raw.bordered === true,
+          caption: str(raw.caption),
+          font: validFontChoice(raw.font),
+        });
+        break;
+      }
       case 'toc':
         blocks.push({ id, type: 'toc', font: validFontChoice(raw.font) });
         break;

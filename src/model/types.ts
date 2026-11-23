@@ -363,6 +363,23 @@ export interface CodeBlock {
   font?: FontChoice;
 }
 
+export type TableAlign = 'left' | 'center' | 'right';
+
+export interface TableBlock {
+  id: string;
+  type: 'table';
+  /** Row-major cell text; each row has one cell per column. */
+  rows: string[][];
+  /** One alignment per column; its length is the column count. */
+  align: TableAlign[];
+  /** Render and export the first row as a header. */
+  header: boolean;
+  /** Draw a full grid instead of booktabs horizontal rules. */
+  bordered?: boolean;
+  caption?: string;
+  font?: FontChoice;
+}
+
 export interface TocBlock {
   id: string;
   type: 'toc';
@@ -387,6 +404,7 @@ export type Block =
   | ImageBlock
   | MathBlock
   | CodeBlock
+  | TableBlock
   | TocBlock
   | TikzBlock;
 

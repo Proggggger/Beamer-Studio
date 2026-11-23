@@ -1040,3 +1040,96 @@ describe('tikz drawings', () => {
     }))).toEqual([]);
   });
 });
+
+describe('toLatex tables', () => {
+  function tableBlock(patch: Partial<Extract<Block, { type: 'table' }>> = {}): Block {
+    return {
+      id: 't',
+      type: 'table',
+      rows: [
+        ['Name', 'Score'],
+        ['Ada', '10'],
+      ],
+      align: ['left', 'right'],
+      header: true,
+      ...patch,
+    };
+  }
+
+  it('emits a booktabs tabular with a bold header row', () => {
+    const tex = toLatex(deck({ slides: [frame([tableBlock()])] }));
+    expect(tex).toContain('\\usepackage{booktabs}');
+    expect(tex).toContain('\\begin{tabular}{lr}');
+    expect(tex).toContain('\\toprule');
+    expect(tex).toContain('\\textbf{Name} & \\textbf{Score} \\\\');
+    expect(tex).toContain('\\midrule');
+    expect(tex).toContain('Ada & 10 \\\\');
+    expect(tex).toContain('\\bottomrule');
+    expect(tex).not.toContain('\\hline');
+  });
+
+  it('omits the header rule when the block has no header', () => {
+    const tex = toLatex(deck({ slides: [frame([tableBlock({ header: false })])] }));
+    expect(tex).not.toContain('\\midrule');
+    expect(tex).not.toContain('\\textbf{Name}');
+    expect(tex).toContain('Name & Score \\\\');
+  });
+
+  it('switches to a full grid when bordered', () => {
+    const tex = toLatex(deck({ slides: [frame([tableBlock({ bordered: true })])] }));
+    expect(tex).toContain('\\begin{tabular}{|l|r|}');
+    expect(tex).toContain('\\hline');
+    expect(tex).not.toContain('\\toprule');
+    expect(tex).not.toContain('\\bottomrule');
+  });
+
+  it('wraps the table in a caption float when a caption is set', () => {
+    const tex = toLatex(deck({ slides: [frame([tableBlock({ caption: 'Results' })])] }));
+    expect(tex).toContain('\\begin{table}');
+    expect(tex).toContain('\\centering');
+    expect(tex).toContain('\\caption{Results}');
+    expect(tex).toContain('\\end{table}');
+    expect(tex).not.toContain('\\begin{center}');
+  });
+
+  it('escapes bare ampersands and percent signs but keeps inline LaTeX', () => {
+    const tex = toLatex(
+      deck({
+        slides: [
+          frame([
+            tableBlock({
+              header: false,
+              rows: [['Tom & Jerry', '50%', '\\& ready', '$x^2$']],
+              align: ['left', 'left', 'left', 'left'],
+            }),
+          ]),
+        ],
+      }),
+    );
+    expect(tex).toContain('Tom \\& Jerry & 50\\% & \\& ready & $x^2$ \\\\');
+    expect(tex).not.toContain('\\\\& ready');
+  });
+
+  it('escapes an ampersand following a line-break command', () => {
+    const tex = toLatex(
+      deck({
+        slides: [
+          frame([
+            tableBlock({
+              header: false,
+              rows: [['first\\\\& second']],
+              align: ['left'],
+            }),
+          ]),
+        ],
+      }),
+    );
+    // `\\` is a real command, so the & after it still needs escaping.
+    expect(tex).toContain('first\\\\\\& second \\\\');
+  });
+
+  it('does not pull in booktabs without any table', () => {
+    const tex = toLatex(deck());
+    expect(tex).not.toContain('\\usepackage{booktabs}');
+  });
+});

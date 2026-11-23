@@ -13,6 +13,7 @@ export function Toolbar() {
   const loadSampleDeck = useDeckStore((state) => state.loadSampleDeck);
   const replaceDeck = useDeckStore((state) => state.replaceDeck);
   const setShowExport = useDeckStore((state) => state.setShowExport);
+  const setShowImport = useDeckStore((state) => state.setShowImport);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const openFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -85,6 +86,14 @@ export function Toolbar() {
           hidden
           onChange={openFile}
         />
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setShowImport(true)}
+          title="Import a Beamer .tex file"
+        >
+          Import .tex
+        </button>
       </div>
       <div className="toolbar-group">
         <button
